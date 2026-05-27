@@ -1,6 +1,6 @@
 # 🌿 Mapa de Atuação — Cooperativa
 
-Mapa interativo PWA dos municípios de atuação da cooperativa em MG e RS.
+Mapa interativo PWA da área de atuação das cooperativas Sicredi em MG e RS.
 
 ## 📁 Estrutura do Projeto
 
