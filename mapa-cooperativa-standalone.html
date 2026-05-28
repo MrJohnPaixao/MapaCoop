@@ -436,9 +436,9 @@ input  { font-family: inherit; }
 /* ── Tooltip ─────────────────────────────────────────── */
 #tooltip {
   position: absolute;
-  background: var(--verde);
+  background: #222826;
   color: var(--branco);
-  padding: 10px 14px;
+  padding: 11px 14px 12px;
   border-radius: var(--radius);
   font-size: 0.8rem;
   pointer-events: none;
@@ -447,26 +447,41 @@ input  { font-family: inherit; }
   z-index: 200;
   min-width: 150px;
   max-width: 210px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.22);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-top: 3px solid var(--verde-claro);
+  box-shadow: 0 10px 28px rgba(34,40,38,0.32);
 }
 #tooltip.visible { opacity: 1; }
 #tt-name {
   font-family: 'Exo 2', 'Nunito', Arial, sans-serif;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   margin-bottom: 3px;
+  color: #FFFFFF;
 }
-#tt-uf { font-size: 0.73rem; opacity: 0.75; }
+#tt-uf {
+  font-size: 0.73rem;
+  color: #DDE5DC;
+}
 .tt-tag {
   display: inline-block;
-  margin-top: 5px;
-  padding: 2px 8px;
+  margin-top: 7px;
+  padding: 3px 9px;
   border-radius: 10px;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 700;
+  border: 1px solid transparent;
 }
-.tt-tag.atuacao  { background: var(--verde-claro); color: var(--verde); }
-.tt-tag.limitrofe { background: rgba(255,255,255,0.18); }
+.tt-tag.atuacao  {
+  background: #EAF6E4;
+  border-color: #64C832;
+  color: #1F4F0A;
+}
+.tt-tag.limitrofe {
+  background: #FFFFFF;
+  border-color: #DDE5DC;
+  color: #222826;
+}
 
 /* ── Info Panel ─────────────────────────────────────── */
 #info-panel {
