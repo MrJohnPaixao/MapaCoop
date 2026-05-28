@@ -3,6 +3,7 @@ Gera mapa-cooperativa-standalone.html com CSS, JS e dados embutidos.
 """
 
 from pathlib import Path
+import base64
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def read_text(path):
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def read_data_uri(path, mime_type):
+    data = (ROOT / path).read_bytes()
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
 
 
 def main():
@@ -20,8 +27,10 @@ def main():
     app_js = read_text("js/app.js")
     mapa_data = read_text("data/municipios.json")
     brasil_data = read_text("data/brasil.json")
+    logo_uri = read_data_uri("icons/sicredi-horizontal-box-rgb.png", "image/png")
 
     html = html.replace('  <link rel="manifest" href="manifest.json">\n', "")
+    html = html.replace('src="icons/sicredi-horizontal-box-rgb.png"', f'src="{logo_uri}"')
     html = html.replace('  <link rel="stylesheet" href="css/style.css">', f"  <style>\n{css}\n  </style>")
     html = html.replace(
         '<script src="js/map.js"></script>\n<script src="js/ui.js"></script>\n<script src="js/app.js"></script>',

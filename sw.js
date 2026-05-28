@@ -1,5 +1,5 @@
 // Service Worker — Mapa Cooperativa PWA
-const CACHE_NAME = 'mapa-coop-v2';
+const CACHE_NAME = 'mapa-sicredi-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,8 @@ const ASSETS = [
   './data/municipios.json',
   './data/brasil.json',
   './manifest.json',
-  'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500&display=swap'
+  './icons/sicredi-horizontal-box-rgb.png',
+  'https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap'
 ];
 
 self.addEventListener('install', e => {

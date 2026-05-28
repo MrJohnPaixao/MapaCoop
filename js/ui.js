@@ -4,9 +4,9 @@
 
 const UI = (() => {
   const REGIAO_CORES = {
-    'mg-oeste': '#2d6a4f',
-    'mg-leste': '#74c69d',
-    'rs':       '#40916c'
+    'mg-oeste': '#3FA110',
+    'mg-leste': '#64C832',
+    'rs':       '#2F7D0C'
   };
 
   const REGIAO_LABELS = {
@@ -78,7 +78,7 @@ const UI = (() => {
 
         const hdr = document.createElement('div');
         hdr.className = 'region-header';
-        hdr.innerHTML = `<div class="region-dot" style="background:#b7e4c7"></div>${UF_LABELS[uf]}`;
+        hdr.innerHTML = `<div class="region-dot" style="background:#EAF6E4;border:1px solid #3FA110"></div>${UF_LABELS[uf]}`;
         list.appendChild(hdr);
 
         grupo.forEach(feat => {
@@ -140,9 +140,15 @@ const UI = (() => {
     const el = tt();
     const container = document.getElementById('map-container');
     const rect = container.getBoundingClientRect();
-    let x = e.clientX - rect.left + 16;
-    let y = e.clientY - rect.top - 14;
-    if (x + 220 > rect.width) x = e.clientX - rect.left - 220;
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+    const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+    const ttW = 210;
+    const ttH = 80;
+    let x = clientX - rect.left + 16;
+    let y = clientY - rect.top - 14;
+    if (x + ttW > rect.width) x = x - ttW - 32;
+    if (y + ttH > rect.height) y = y - ttH - 10;
+    if (x < 0) x = 8;
     if (y < 0) y = 8;
     el.style.left = x + 'px';
     el.style.top  = y + 'px';

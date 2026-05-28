@@ -1,11 +1,11 @@
 {
-  "name": "Mapa de Atuação — Cooperativa",
-  "short_name": "MapaCoop",
-  "description": "Mapa interativo dos municípios de atuação da cooperativa",
+  "name": "Mapa de Atuacao Sicredi",
+  "short_name": "Mapa Sicredi",
+  "description": "Mapa interativo da area de atuacao Sicredi",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#2d6a4f",
-  "theme_color": "#2d6a4f",
+  "background_color": "#FFFFFF",
+  "theme_color": "#3FA110",
   "orientation": "any",
   "icons": [
     { "src": "icons/icon-72.png",  "sizes": "72x72",   "type": "image/png" },
