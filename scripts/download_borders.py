@@ -17,7 +17,8 @@ ESTADOS_URL = "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojso
 BRASIL_MUN_URL = "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json"
 RAW_PATH = os.path.join("data", "estados_raw.json")
 OUT_PATH = os.path.join("data", "brasil.json")
-TOLERANCE = 0.05
+ESTADOS_TOLERANCE = 0.025
+PAIS_TOLERANCE = 0.035
 
 
 UF_NOMES = {
@@ -94,30 +95,41 @@ def douglas_peucker(points, tolerance):
     return [start, end]
 
 
-def simplify_ring(ring):
+def validate_ring(ring):
+    return len(ring) >= 4
+
+
+def simplify_ring(ring, tolerance):
     if len(ring) <= 4:
-        return ring
+        return ring if validate_ring(ring) else []
 
     closed = ring[0] == ring[-1]
     points = ring[:-1] if closed else ring
-    simplified = douglas_peucker(points, TOLERANCE)
+    simplified = douglas_peucker(points, tolerance)
     if len(simplified) < 3:
         simplified = points[:3]
     simplified = [[round(x, 4), round(y, 4)] for x, y in simplified]
     if simplified[0] != simplified[-1]:
         simplified.append(simplified[0])
-    return simplified
+    return simplified if validate_ring(simplified) else []
 
 
-def simplify_geometry(geometry):
+def simplify_geometry(geometry, tolerance):
     geom_type = geometry.get("type")
     coords = geometry.get("coordinates", [])
     if geom_type == "Polygon":
-        return {"type": "Polygon", "coordinates": [simplify_ring(r) for r in coords]}
+        rings = [simplify_ring(r, tolerance) for r in coords]
+        return {"type": "Polygon", "coordinates": [r for r in rings if validate_ring(r)]}
     if geom_type == "MultiPolygon":
+        polygons = []
+        for poly in coords:
+            rings = [simplify_ring(r, tolerance) for r in poly]
+            rings = [r for r in rings if validate_ring(r)]
+            if rings:
+                polygons.append(rings)
         return {
             "type": "MultiPolygon",
-            "coordinates": [[simplify_ring(r) for r in poly] for poly in coords],
+            "coordinates": polygons,
         }
     raise ValueError(f"Tipo de geometria nao suportado: {geom_type}")
 
@@ -191,10 +203,8 @@ def assemble_rings(segments):
 
 
 def state_geometry_from_municipios(features):
-    rings = [simplify_ring(r) for r in assemble_rings(collect_boundary_segments(features))]
-    rings = [r for r in rings if len(r) >= 4]
-    if len(rings) == 1:
-        return {"type": "Polygon", "coordinates": rings}
+    rings = [simplify_ring(r, ESTADOS_TOLERANCE) for r in assemble_rings(collect_boundary_segments(features))]
+    rings = [r for r in rings if validate_ring(r)]
     return {"type": "MultiPolygon", "coordinates": [[ring] for ring in rings]}
 
 
@@ -278,13 +288,14 @@ def main():
             estados.append({
                 "id": uf,
                 "nome": feature_name(feature, uf),
-                "geometry": simplify_geometry(feature["geometry"]),
+                "geometry": simplify_geometry(feature["geometry"], ESTADOS_TOLERANCE),
             })
         estados.sort(key=lambda item: item["id"])
 
     pais_polygons = []
     for estado in estados:
-        pais_polygons.extend(state_to_polygons(estado["geometry"]))
+        pais_geometry = simplify_geometry(estado["geometry"], PAIS_TOLERANCE)
+        pais_polygons.extend(state_to_polygons(pais_geometry))
 
     result = {
         "pais": {

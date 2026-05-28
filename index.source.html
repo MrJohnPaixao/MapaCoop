@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Mapa interativo da area de atuacao Sicredi">
+  <meta name="theme-color" content="#3FA110">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mapa Sicredi">
+
+  <title>Mapa de Atuacao Sicredi</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<header id="header">
+  <button id="btn-menu" aria-label="Abrir menu">☰</button>
+  <img class="logo" src="icons/sicredi-horizontal-box-rgb.png" alt="Sicredi">
+  <div class="header-text">
+    <h1>Area de Atuacao</h1>
+    <p>Mapa Interativo Sicredi</p>
+  </div>
+  <div class="header-badges">
+    <div class="badge">
+      <strong id="badge-atu">—</strong>
+      municípios
+    </div>
+  </div>
+</header>
+
+<!-- ── App layout ──────────────────────────────────────── -->
+<div id="app">
+
+  <!-- Sidebar overlay (mobile) -->
+  <div id="sidebar-overlay"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="atuacao">✅ Atuação</button>
+      <button class="tab-btn"        data-tab="limitrofe">📍 Limítrofes</button>
+    </div>
+
+    <div class="search-wrap">
+      <input type="search" id="search-input" placeholder="Buscar município..." autocomplete="off" autocorrect="off">
+    </div>
+
+    <div id="municipio-list" role="list"></div>
+
+    <div class="sidebar-legend">
+      <div class="legend-title">Legenda</div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#2F7D0C;border:1.5px solid #133A08"></div>
+        Municípios de atuação
+      </div>
+      <div class="legend-item">
+        <div class="legend-swatch" style="background:#DCEFD4;border:1px solid #5E8F50"></div>
+        Municípios limítrofes
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- Toolbar -->
+    <div id="toolbar">
+      <button class="filter-btn active" data-region="todos">Todos</button>
+      <button class="filter-btn" data-region="mg-oeste">MG Oeste</button>
+      <button class="filter-btn" data-region="rs">RS</button>
+      <button class="filter-btn" data-region="mg-leste">MG Leste</button>
+      <div class="zoom-group">
+        <button class="zoom-btn" id="btn-zoom-in"    title="Zoom +">+</button>
+        <button class="zoom-btn" id="btn-zoom-out"   title="Zoom −">−</button>
+        <button class="zoom-btn" id="btn-zoom-reset" title="Resetar" style="font-size:13px">⌂</button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map-container">
+      <!-- Loading -->
+      <div id="loading">
+        <div class="spinner"></div>
+        <p>Carregando mapa...</p>
+        <small>Preparando dados geográficos</small>
+      </div>
+
+      <!-- SVG Map -->
+      <div id="map-wrapper">
+        <svg id="map-svg" xmlns="http://www.w3.org/2000/svg" aria-label="Mapa de municípios"></svg>
+      </div>
+
+      <!-- Tooltip -->
+      <div id="tooltip" role="tooltip" aria-live="polite">
+        <div id="tt-name"></div>
+        <div id="tt-uf"></div>
+        <div id="tt-tag"></div>
+      </div>
+
+      <!-- Info panel -->
+      <div id="info-panel" role="complementary">
+        <button id="btn-close-info" aria-label="Fechar">✕</button>
+        <h3 id="ip-nome"></h3>
+        <div class="info-row"><span>Estado</span><strong id="ip-estado"></strong></div>
+        <div class="info-row"><span>Região</span><strong id="ip-regiao"></strong></div>
+        <div class="info-row"><span>Tipo</span><strong id="ip-tipo"></strong></div>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div id="stats-bar">
+      <div class="stat-cell"><strong id="s-atu">—</strong>Atuação</div>
+      <div class="stat-cell"><strong id="s-lim">—</strong>Limítrofes</div>
+      <div class="stat-cell"><strong id="s-mg">—</strong>em MG</div>
+      <div class="stat-cell"><strong id="s-rs">—</strong>em RS</div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" role="status"></div>
+
+<!-- PWA Install Banner -->
+<div id="install-banner">
+  <span>📱 Instalar como app</span>
+  <button id="btn-install">Instalar</button>
+  <button id="btn-dismiss-install">✕</button>
+</div>
+
+<script src="js/map.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

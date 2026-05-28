@@ -7,6 +7,18 @@
 const MapEngine = (() => {
   const VW = 960;
   const VH = 600;
+  const MIN_ZOOM          = 0.75;
+  const MAX_ZOOM          = 120;
+  const WHEEL_ZOOM_IN     = 1.14;
+  const WHEEL_ZOOM_OUT    = 0.88;
+  const BUTTON_ZOOM_IN    = 1.40;
+  const BUTTON_ZOOM_OUT   = 0.72;
+  const REGION_FIT_PAD    = 18;
+  const REGION_FIT_BOOST  = 10;
+  const REGION_MAX_ZOOM   = 90;
+  const LABEL_VIEW_PAD     = 24;
+  const CULL_MIN_ZOOM      = 1.5;
+  const CULL_VIEW_PAD      = 50;
   const LABEL_PX          = 11;   // tamanho visual desejado dos labels em px de tela
   const LABEL_ZOOM_THRESH = 2.5;  // zoom mínimo para mostrar labels na visão geral
 
@@ -30,6 +42,7 @@ const MapEngine = (() => {
   let selectedId       = null;
   let interactionSetup = false;
   let animFrame        = null;
+  let cullTimer        = null;
 
   /* ─── Projeção (bbox real das geometrias) ─────────────── */
   function buildProjection(feats, W, H, padding = 32) {
@@ -69,7 +82,7 @@ const MapEngine = (() => {
     if (!ring || ring.length < 2) return '';
     return ring.map((pt, i) => {
       const [x, y] = proj(pt[0], pt[1]);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
     }).join('') + 'Z';
   }
 
@@ -153,6 +166,7 @@ const MapEngine = (() => {
       path.addEventListener('mousemove',  onPathMove);
       path.addEventListener('mouseleave', onPathLeave);
       path.addEventListener('click',      onPathClick);
+      path.addEventListener('touchstart', onPathTouchStart, { passive: true });
       path.addEventListener('touchend',   onPathTouchEnd, { passive: true });
       groupEl.appendChild(path);
     });
@@ -213,6 +227,8 @@ const MapEngine = (() => {
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('dominant-baseline', 'middle');
     text.setAttribute('data-regiao', regiao);
+    text.dataset.svgX = cx.toFixed(2);
+    text.dataset.svgY = cy.toFixed(2);
     text.style.display = 'none';
 
     const words = nome.split(' ');
@@ -247,25 +263,84 @@ const MapEngine = (() => {
     [groupPais, groupEstados, groupEl, groupLabels].forEach(group => {
       if (group) group.setAttribute('transform', transformValue);
     });
-    // Compensar font-size: divide pelo scale para manter tamanho visual constante
-    const fs = (LABEL_PX / transform.k).toFixed(3);
-    const sw = (0.45 / transform.k).toFixed(4);
-    groupLabels.querySelectorAll('.muni-label').forEach(el => {
-      el.setAttribute('font-size', fs);
-      el.setAttribute('stroke-width', sw);
-    });
     updateLabelVisibility();
+    scheduleCullOffscreenPaths();
+  }
+
+  function clampZoom(k) {
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
   }
 
   function updateLabelVisibility() {
     if (!groupLabels) return;
     const hasFilter = activeRegion !== null;
     const zoomedIn  = transform.k >= LABEL_ZOOM_THRESH;
+    const visible = hasFilter || zoomedIn;
+    const fontSize = LABEL_PX / transform.k;
+    const strokeWidth = 0.45 / transform.k;
+    const vx0 = -transform.x / transform.k;
+    const vy0 = -transform.y / transform.k;
+    const vx1 = vx0 + VW / transform.k;
+    const vy1 = vy0 + VH / transform.k;
+
     groupLabels.querySelectorAll('.muni-label').forEach(el => {
       const regionOk = hasFilter
         ? el.getAttribute('data-regiao') === activeRegion
-        : zoomedIn;
-      el.style.display = regionOk ? '' : 'none';
+        : visible;
+      if (!regionOk) {
+        el.style.display = 'none';
+        return;
+      }
+
+      const lx = Number.parseFloat(el.dataset.svgX || el.getAttribute('x') || '0');
+      const ly = Number.parseFloat(el.dataset.svgY || el.getAttribute('y') || '0');
+      const inView = lx > vx0 - LABEL_VIEW_PAD && lx < vx1 + LABEL_VIEW_PAD &&
+                     ly > vy0 - LABEL_VIEW_PAD && ly < vy1 + LABEL_VIEW_PAD;
+
+      el.style.display = inView ? '' : 'none';
+      if (!inView) return;
+
+      el.setAttribute('font-size', fontSize.toFixed(4));
+      el.setAttribute('stroke-width', strokeWidth.toFixed(4));
+      el.querySelectorAll('tspan').forEach(ts => {
+        ts.setAttribute('x', lx.toFixed(2));
+      });
+      const tspans = el.querySelectorAll('tspan');
+      if (tspans.length === 2) {
+        tspans[0].setAttribute('dy', (-fontSize * 0.65).toFixed(3));
+        tspans[1].setAttribute('dy', (fontSize * 1.3).toFixed(3));
+      }
+    });
+  }
+
+  function scheduleCullOffscreenPaths() {
+    clearTimeout(cullTimer);
+    cullTimer = setTimeout(cullOffscreenPaths, 80);
+  }
+
+  function cullOffscreenPaths() {
+    if (!groupEl) return;
+
+    const limitrofePaths = groupEl.querySelectorAll('.muni-path.limitrofe');
+    if (transform.k < CULL_MIN_ZOOM) {
+      limitrofePaths.forEach(path => { path.style.display = ''; });
+      return;
+    }
+
+    const vx0 = -transform.x / transform.k - CULL_VIEW_PAD;
+    const vy0 = -transform.y / transform.k - CULL_VIEW_PAD;
+    const vx1 = vx0 + VW / transform.k + CULL_VIEW_PAD * 2;
+    const vy1 = vy0 + VH / transform.k + CULL_VIEW_PAD * 2;
+
+    limitrofePaths.forEach(path => {
+      try {
+        const bbox = path.getBBox();
+        const inView = bbox.x < vx1 && bbox.x + bbox.width > vx0 &&
+                       bbox.y < vy1 && bbox.y + bbox.height > vy0;
+        path.style.display = inView ? '' : 'none';
+      } catch (_) {
+        path.style.display = '';
+      }
     });
   }
 
@@ -291,18 +366,24 @@ const MapEngine = (() => {
 
   /* ─── Converte coord de tela → espaço do viewBox ──────── */
   function toVB(svg, clientX, clientY) {
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    return pt.matrixTransform(svg.getScreenCTM().inverse());
+    const rect = svg.getBoundingClientRect();
+    const scale = Math.min(rect.width / VW, rect.height / VH);
+    const offsetX = (rect.width - VW * scale) / 2;
+    const offsetY = (rect.height - VH * scale) / 2;
+    return {
+      x: (clientX - rect.left - offsetX) / scale,
+      y: (clientY - rect.top - offsetY) / scale
+    };
   }
 
   /* ─── Zoom centrado num ponto do viewBox ──────────────── */
   function zoomAt(factor, vbX, vbY) {
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    transform.x = vbX - (vbX - transform.x) * factor;
-    transform.y = vbY - (vbY - transform.y) * factor;
-    transform.k = Math.min(20, Math.max(0.5, transform.k * factor));
+    const nextK = clampZoom(transform.k * factor);
+    const effectiveFactor = nextK / transform.k;
+    transform.x = vbX - (vbX - transform.x) * effectiveFactor;
+    transform.y = vbY - (vbY - transform.y) * effectiveFactor;
+    transform.k = nextK;
     applyTransform();
   }
 
@@ -340,12 +421,12 @@ const MapEngine = (() => {
 
     if (!isFinite(minX) || maxX <= minX || maxY <= minY) return;
 
-    const pad  = 40;
+    const pad  = REGION_FIT_PAD;
     const kFit = Math.min(
       (VW - pad * 2) / (maxX - minX),
       (VH - pad * 2) / (maxY - minY)
     );
-    const k  = Math.min(20, Math.max(LABEL_ZOOM_THRESH, kFit));
+    const k  = Math.min(REGION_MAX_ZOOM, Math.max(LABEL_ZOOM_THRESH, kFit * REGION_FIT_BOOST));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
     animateTo({ x: VW / 2 - cx * k, y: VH / 2 - cy * k, k });
@@ -360,7 +441,7 @@ const MapEngine = (() => {
     container.addEventListener('wheel', e => {
       e.preventDefault();
       const pt = toVB(svgEl, e.clientX, e.clientY);
-      zoomAt(e.deltaY < 0 ? 1.15 : 0.87, pt.x, pt.y);
+      zoomAt(e.deltaY < 0 ? WHEEL_ZOOM_IN : WHEEL_ZOOM_OUT, pt.x, pt.y);
     }, { passive: false });
 
     // Mouse → pan
@@ -444,7 +525,14 @@ const MapEngine = (() => {
     e.stopPropagation();
     selectById(e.currentTarget.dataset.id, e.currentTarget.dataset);
   }
+  function onPathTouchStart(e) {
+    e.stopPropagation();
+    const d = e.currentTarget.dataset;
+    UI.showTooltip(d.nome, d.uf, d.tipo);
+    if (e.touches.length) UI.moveTooltip(e.touches[0]);
+  }
   function onPathTouchEnd(e) {
+    setTimeout(() => UI.hideTooltip(), 1200);
     if (e.changedTouches.length === 1) {
       selectById(e.currentTarget.dataset.id, e.currentTarget.dataset);
     }
@@ -481,8 +569,8 @@ const MapEngine = (() => {
   return {
     render,
     loadBrasil,
-    zoomIn:  () => zoomAt(1.35, VW / 2, VH / 2),
-    zoomOut: () => zoomAt(0.74, VW / 2, VH / 2),
+    zoomIn:  () => zoomAt(BUTTON_ZOOM_IN, VW / 2, VH / 2),
+    zoomOut: () => zoomAt(BUTTON_ZOOM_OUT, VW / 2, VH / 2),
     reset:   resetView,
     filter:  filterByRegion,
     fitToRegion,
