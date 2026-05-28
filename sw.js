@@ -1,5 +1,5 @@
 // Service Worker — Mapa Cooperativa PWA
-const CACHE_NAME = 'mapa-sicredi-v3';
+const CACHE_NAME = 'mapa-sicredi-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -25,17 +25,27 @@ self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    ).then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => Promise.all(clients.map(client => client.navigate(client.url))))
   );
   self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.destination === 'document') {
+    e.respondWith(
+      fetch(e.request).then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
+        return response;
+      }).catch(() =>
+        caches.match(e.request).then(cached => cached || caches.match('./index.html'))
+      )
+    );
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => {
-      if (e.request.destination === 'document') {
-        return caches.match('./index.html');
-      }
-    }))
+    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });
