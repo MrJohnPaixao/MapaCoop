@@ -8,8 +8,9 @@ https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-00-uf.j
 import json
 import math
 import os
+import struct
 from collections import defaultdict
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 import urllib.request
 
 
@@ -17,8 +18,10 @@ ESTADOS_URL = "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojso
 BRASIL_MUN_URL = "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json"
 RAW_PATH = os.path.join("data", "estados_raw.json")
 OUT_PATH = os.path.join("data", "brasil.json")
+PAIS_SHP_PATH = os.path.join("BR_Pais_2025", "BR_Pais_2025.shp")
 ESTADOS_TOLERANCE = 0.025
-PAIS_TOLERANCE = 0.035
+PAIS_TOLERANCE = 0.015
+PAIS_MIN_AREA = 0.0005
 
 
 UF_NOMES = {
@@ -132,6 +135,71 @@ def simplify_geometry(geometry, tolerance):
             "coordinates": polygons,
         }
     raise ValueError(f"Tipo de geometria nao suportado: {geom_type}")
+
+
+def ring_area(ring):
+    if len(ring) < 4:
+        return 0
+    area = 0
+    for index in range(len(ring) - 1):
+        x1, y1 = ring[index]
+        x2, y2 = ring[index + 1]
+        area += x1 * y2 - x2 * y1
+    return abs(area) / 2
+
+
+def read_shp_polygon_rings(path):
+    rings = []
+    with open(path, "rb") as fh:
+        fh.read(100)
+        while True:
+            record_header = fh.read(8)
+            if not record_header:
+                break
+
+            _, record_length = struct.unpack(">2i", record_header)
+            content = fh.read(record_length * 2)
+            shape_type = struct.unpack("<i", content[:4])[0]
+            if shape_type == 0:
+                continue
+            if shape_type not in (5, 15, 25):
+                raise ValueError(f"Tipo de shape nao suportado: {shape_type}")
+
+            offset = 4 + 32
+            num_parts, num_points = struct.unpack("<2i", content[offset: offset + 8])
+            offset += 8
+            parts = list(struct.unpack(f"<{num_parts}i", content[offset: offset + 4 * num_parts]))
+            offset += 4 * num_parts
+            points = [
+                struct.unpack("<2d", content[offset + index * 16: offset + index * 16 + 16])
+                for index in range(num_points)
+            ]
+            parts.append(num_points)
+
+            for start, end in zip(parts, parts[1:]):
+                ring = [[x, y] for x, y in points[start:end]]
+                if ring and ring[0] != ring[-1]:
+                    ring.append(ring[0])
+                if validate_ring(ring):
+                    rings.append(ring)
+
+    return rings
+
+
+def country_geometry_from_shp(path):
+    rings = []
+    for ring in read_shp_polygon_rings(path):
+        if ring_area(ring) < PAIS_MIN_AREA:
+            continue
+        simplified = simplify_ring(ring, PAIS_TOLERANCE)
+        if validate_ring(simplified):
+            rings.append(simplified)
+
+    rings.sort(key=ring_area, reverse=True)
+    return {
+        "type": "MultiPolygon",
+        "coordinates": [[ring] for ring in rings],
+    }
 
 
 def iter_polygons(geometry):
@@ -268,18 +336,21 @@ def state_to_polygons(geometry):
 def main():
     os.makedirs("data", exist_ok=True)
     source = ESTADOS_URL
-    try:
-        urllib.request.urlretrieve(source, RAW_PATH)
-    except HTTPError as err:
-        if err.code != 404:
-            raise
-        source = BRASIL_MUN_URL
-        urllib.request.urlretrieve(source, RAW_PATH)
+    if not os.path.exists(RAW_PATH):
+        try:
+            urllib.request.urlretrieve(source, RAW_PATH)
+        except HTTPError as err:
+            if err.code != 404:
+                raise
+            source = BRASIL_MUN_URL
+            urllib.request.urlretrieve(source, RAW_PATH)
+        except URLError:
+            raise FileNotFoundError(f"{RAW_PATH} nao encontrado e nao foi possivel baixar a fonte")
 
     with open(RAW_PATH, "r", encoding="utf-8") as fh:
         raw = json.load(fh)
 
-    if source == BRASIL_MUN_URL:
+    if source == BRASIL_MUN_URL or len(raw.get("features", [])) > 100:
         estados = build_from_municipios(raw)
     else:
         estados = []
@@ -292,17 +363,21 @@ def main():
             })
         estados.sort(key=lambda item: item["id"])
 
-    pais_polygons = []
-    for estado in estados:
-        pais_geometry = simplify_geometry(estado["geometry"], PAIS_TOLERANCE)
-        pais_polygons.extend(state_to_polygons(pais_geometry))
+    if os.path.exists(PAIS_SHP_PATH):
+        pais_geometry = country_geometry_from_shp(PAIS_SHP_PATH)
+    else:
+        pais_polygons = []
+        for estado in estados:
+            pais_geometry = simplify_geometry(estado["geometry"], PAIS_TOLERANCE)
+            pais_polygons.extend(state_to_polygons(pais_geometry))
+        pais_geometry = {
+            "type": "MultiPolygon",
+            "coordinates": pais_polygons,
+        }
 
     result = {
         "pais": {
-            "geometry": {
-                "type": "MultiPolygon",
-                "coordinates": pais_polygons,
-            }
+            "geometry": pais_geometry,
         },
         "estados": estados,
         "estados_destaque": ["MG", "RS"],

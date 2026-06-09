@@ -113,12 +113,17 @@
     }
   });
 
-  // Resize — viewBox cuida do reescalonamento; só atualiza a UI
+  // Resize/orientação — recalcula o viewBox real e refaz o fit do mapa
   let resizeTimer;
-  window.addEventListener('resize', () => {
+  function handleViewportChange() {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => UI.init(data.features, data.meta), 300);
-  });
+    resizeTimer = setTimeout(() => {
+      MapEngine.resize();
+      UI.init(data.features, data.meta);
+    }, 180);
+  }
+  window.addEventListener('resize', handleViewportChange);
+  window.addEventListener('orientationchange', handleViewportChange);
 
   /* ─── PWA Install Banner ────────────────────────────── */
   let deferredPrompt = null;

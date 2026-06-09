@@ -5,8 +5,8 @@
  */
 
 const MapEngine = (() => {
-  const VW = 960;
-  const VH = 600;
+  const DEFAULT_VW = 960;
+  const DEFAULT_VH = 600;
   const MIN_ZOOM          = 0.75;
   const MAX_ZOOM          = 120;
   const WHEEL_ZOOM_IN     = 1.14;
@@ -20,6 +20,7 @@ const MapEngine = (() => {
   const CULL_MIN_ZOOM      = 1.5;
   const CULL_VIEW_PAD      = 50;
   const LABEL_PX          = 11;   // tamanho visual desejado dos labels em px de tela
+  const LABEL_MOBILE_PX   = 15;   // labels maiores para leitura no PWA/celular
   const LABEL_ZOOM_THRESH = 2.5;  // zoom mínimo para mostrar labels na visão geral
 
   let features         = [];
@@ -31,6 +32,8 @@ const MapEngine = (() => {
   let groupLabels      = null;
   let containerEl      = null;
   let brasilData       = null;
+  let viewW            = DEFAULT_VW;
+  let viewH            = DEFAULT_VH;
   let transform        = { x: 0, y: 0, k: 1 };
   const homeTransform  = { x: 0, y: 0, k: 1 };
   let activeRegion     = null;
@@ -99,8 +102,24 @@ const MapEngine = (() => {
   }
 
   function projectionFeatures() {
-    const estados = (brasilData?.estados || []).map(estado => ({ geometry: estado.geometry }));
-    return features.concat(estados);
+    if (features.length) return features;
+    return (brasilData?.estados || []).map(estado => ({ geometry: estado.geometry }));
+  }
+
+  function getViewportSize() {
+    const rect = containerEl?.getBoundingClientRect();
+    const width = Math.max(320, Math.round(rect?.width || DEFAULT_VW));
+    const height = Math.max(320, Math.round(rect?.height || DEFAULT_VH));
+    return { width, height };
+  }
+
+  function setSvgViewport() {
+    if (!svgEl) return;
+    const size = getViewportSize();
+    viewW = size.width;
+    viewH = size.height;
+    svgEl.setAttribute('viewBox', `0 0 ${viewW} ${viewH}`);
+    svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   }
 
   function createGroups() {
@@ -195,10 +214,8 @@ const MapEngine = (() => {
 
     containerEl = svg.closest('#map-container');
 
-    svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-    projection = buildProjection(projectionFeatures(), VW, VH);
+    setSvgViewport();
+    projection = buildProjection(projectionFeatures(), viewW, viewH);
     interactionSetup = false;
     Object.assign(transform, homeTransform);
     drawLayers();
@@ -216,8 +233,18 @@ const MapEngine = (() => {
     }
 
     if (!svgEl || !features.length) return;
-    projection = buildProjection(projectionFeatures(), VW, VH);
+    setSvgViewport();
+    projection = buildProjection(projectionFeatures(), viewW, viewH);
     drawLayers();
+  }
+
+  function resize() {
+    if (!svgEl || !features.length) return;
+    setSvgViewport();
+    projection = buildProjection(projectionFeatures(), viewW, viewH);
+    Object.assign(transform, homeTransform);
+    drawLayers();
+    if (activeRegion) fitToRegion(activeRegion);
   }
 
   /* ─── Labels ──────────────────────────────────────────── */
@@ -271,17 +298,24 @@ const MapEngine = (() => {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
   }
 
+  function getLabelPx() {
+    if (typeof window === 'undefined' || !window.matchMedia) return LABEL_PX;
+    return window.matchMedia('(max-width: 768px), (pointer: coarse)').matches
+      ? LABEL_MOBILE_PX
+      : LABEL_PX;
+  }
+
   function updateLabelVisibility() {
     if (!groupLabels) return;
     const hasFilter = activeRegion !== null;
     const zoomedIn  = transform.k >= LABEL_ZOOM_THRESH;
     const visible = hasFilter || zoomedIn;
-    const fontSize = LABEL_PX / transform.k;
+    const fontSize = getLabelPx() / transform.k;
     const strokeWidth = 0.45 / transform.k;
     const vx0 = -transform.x / transform.k;
     const vy0 = -transform.y / transform.k;
-    const vx1 = vx0 + VW / transform.k;
-    const vy1 = vy0 + VH / transform.k;
+    const vx1 = vx0 + viewW / transform.k;
+    const vy1 = vy0 + viewH / transform.k;
 
     groupLabels.querySelectorAll('.muni-label').forEach(el => {
       const regionOk = hasFilter
@@ -329,8 +363,8 @@ const MapEngine = (() => {
 
     const vx0 = -transform.x / transform.k - CULL_VIEW_PAD;
     const vy0 = -transform.y / transform.k - CULL_VIEW_PAD;
-    const vx1 = vx0 + VW / transform.k + CULL_VIEW_PAD * 2;
-    const vy1 = vy0 + VH / transform.k + CULL_VIEW_PAD * 2;
+    const vx1 = vx0 + viewW / transform.k + CULL_VIEW_PAD * 2;
+    const vy1 = vy0 + viewH / transform.k + CULL_VIEW_PAD * 2;
 
     limitrofePaths.forEach(path => {
       try {
@@ -367,9 +401,9 @@ const MapEngine = (() => {
   /* ─── Converte coord de tela → espaço do viewBox ──────── */
   function toVB(svg, clientX, clientY) {
     const rect = svg.getBoundingClientRect();
-    const scale = Math.min(rect.width / VW, rect.height / VH);
-    const offsetX = (rect.width - VW * scale) / 2;
-    const offsetY = (rect.height - VH * scale) / 2;
+    const scale = Math.min(rect.width / viewW, rect.height / viewH);
+    const offsetX = (rect.width - viewW * scale) / 2;
+    const offsetY = (rect.height - viewH * scale) / 2;
     return {
       x: (clientX - rect.left - offsetX) / scale,
       y: (clientY - rect.top - offsetY) / scale
@@ -423,13 +457,13 @@ const MapEngine = (() => {
 
     const pad  = REGION_FIT_PAD;
     const kFit = Math.min(
-      (VW - pad * 2) / (maxX - minX),
-      (VH - pad * 2) / (maxY - minY)
+      (viewW - pad * 2) / (maxX - minX),
+      (viewH - pad * 2) / (maxY - minY)
     );
     const k  = Math.min(REGION_MAX_ZOOM, Math.max(LABEL_ZOOM_THRESH, kFit * REGION_FIT_BOOST));
     const cx = (minX + maxX) / 2;
     const cy = (minY + maxY) / 2;
-    animateTo({ x: VW / 2 - cx * k, y: VH / 2 - cy * k, k });
+    animateTo({ x: viewW / 2 - cx * k, y: viewH / 2 - cy * k, k });
   }
 
   /* ─── Interação ──────────────────────────────────────── */
@@ -569,9 +603,10 @@ const MapEngine = (() => {
   return {
     render,
     loadBrasil,
-    zoomIn:  () => zoomAt(BUTTON_ZOOM_IN, VW / 2, VH / 2),
-    zoomOut: () => zoomAt(BUTTON_ZOOM_OUT, VW / 2, VH / 2),
+    zoomIn:  () => zoomAt(BUTTON_ZOOM_IN, viewW / 2, viewH / 2),
+    zoomOut: () => zoomAt(BUTTON_ZOOM_OUT, viewW / 2, viewH / 2),
     reset:   resetView,
+    resize,
     filter:  filterByRegion,
     fitToRegion,
     select:  selectById,
