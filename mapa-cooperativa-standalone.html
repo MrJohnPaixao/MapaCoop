@@ -832,6 +832,7 @@ const MapEngine = (() => {
   const CULL_MIN_ZOOM      = 1.5;
   const CULL_VIEW_PAD      = 50;
   const LABEL_PX          = 11;   // tamanho visual desejado dos labels em px de tela
+  const LABEL_MOBILE_PX   = 15;   // labels maiores para leitura no PWA/celular
   const LABEL_ZOOM_THRESH = 2.5;  // zoom mínimo para mostrar labels na visão geral
 
   let features         = [];
@@ -1083,12 +1084,19 @@ const MapEngine = (() => {
     return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
   }
 
+  function getLabelPx() {
+    if (typeof window === 'undefined' || !window.matchMedia) return LABEL_PX;
+    return window.matchMedia('(max-width: 768px), (pointer: coarse)').matches
+      ? LABEL_MOBILE_PX
+      : LABEL_PX;
+  }
+
   function updateLabelVisibility() {
     if (!groupLabels) return;
     const hasFilter = activeRegion !== null;
     const zoomedIn  = transform.k >= LABEL_ZOOM_THRESH;
     const visible = hasFilter || zoomedIn;
-    const fontSize = LABEL_PX / transform.k;
+    const fontSize = getLabelPx() / transform.k;
     const strokeWidth = 0.45 / transform.k;
     const vx0 = -transform.x / transform.k;
     const vy0 = -transform.y / transform.k;
