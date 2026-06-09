@@ -27,11 +27,11 @@
     }
   } catch (err) {
     loadingEl.innerHTML = `
-      <div style="text-align:center;padding:20px;color:#3FA110">
+      <div style="text-align:center;padding:20px;color:#C8FF00">
         <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
         <p style="font-family:'Exo 2','Nunito',Arial,sans-serif;margin-bottom:6px;font-weight:700">Erro ao carregar dados</p>
         <small style="color:#6b7280">${err.message}</small><br>
-        <button onclick="location.reload()" style="margin-top:14px;padding:8px 20px;background:#3FA110;color:white;border-radius:20px;border:none;cursor:pointer;font-size:0.85rem">
+        <button onclick="location.reload()" style="margin-top:14px;padding:8px 20px;background:#C8FF00;color:#0A0F1E;border-radius:20px;border:none;cursor:pointer;font-size:0.85rem">
           Tentar novamente
         </button>
       </div>`;

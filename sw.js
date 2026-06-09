@@ -1,5 +1,5 @@
-// Service Worker — Mapa Cooperativa PWA
-const CACHE_NAME = 'mapa-sicredi-v4';
+// Service Worker — MapaCoop Lu System PWA
+const CACHE_NAME = 'mapacoop-lusystem-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -10,8 +10,10 @@ const ASSETS = [
   './data/municipios.json',
   './data/brasil.json',
   './manifest.json',
-  './icons/sicredi-horizontal-box-rgb.png',
-  'https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap'
+  './icons/lu-moon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  'https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=Exo+2:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap'
 ];
 
 self.addEventListener('install', e => {

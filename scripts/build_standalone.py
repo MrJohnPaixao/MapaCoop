@@ -31,11 +31,11 @@ def build_html(include_manifest):
     app_js = read_text("js/app.js")
     mapa_data = read_text("data/municipios.json")
     brasil_data = read_text("data/brasil.json")
-    logo_uri = read_data_uri("icons/sicredi-horizontal-box-rgb.png", "image/png")
+    logo_uri = read_data_uri("icons/lu-moon.svg", "image/svg+xml")
 
     if not include_manifest:
         html = html.replace('  <link rel="manifest" href="manifest.json">\n', "")
-    html = html.replace('src="icons/sicredi-horizontal-box-rgb.png"', f'src="{logo_uri}"')
+    html = html.replace('src="icons/lu-moon.svg"', f'src="{logo_uri}"')
     html = html.replace('  <link rel="stylesheet" href="css/style.css">', f"  <style>\n{css}\n  </style>")
     html = html.replace(
         '<script src="js/map.js"></script>\n<script src="js/ui.js"></script>\n<script src="js/app.js"></script>',

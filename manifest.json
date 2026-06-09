@@ -1,11 +1,11 @@
 {
-  "name": "Mapa de Atuacao Sicredi",
-  "short_name": "Mapa Sicredi",
-  "description": "Mapa interativo da area de atuacao Sicredi",
+  "name": "MapaCoop Lu System",
+  "short_name": "MapaCoop",
+  "description": "Mapa interativo da area de atuacao cooperativa com identidade Lu System",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#FFFFFF",
-  "theme_color": "#3FA110",
+  "background_color": "#0A0F1E",
+  "theme_color": "#0A0F1E",
   "orientation": "any",
   "icons": [
     { "src": "icons/icon-72.png",  "sizes": "72x72",   "type": "image/png" },

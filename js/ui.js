@@ -4,9 +4,9 @@
 
 const UI = (() => {
   const REGIAO_CORES = {
-    'mg-oeste': '#3FA110',
-    'mg-leste': '#64C832',
-    'rs':       '#2F7D0C'
+    'mg-oeste': '#C8FF00',
+    'mg-leste': '#7BFF6A',
+    'rs':       '#00E5FF'
   };
 
   const REGIAO_LABELS = {
@@ -78,7 +78,7 @@ const UI = (() => {
 
         const hdr = document.createElement('div');
         hdr.className = 'region-header';
-        hdr.innerHTML = `<div class="region-dot" style="background:#EAF6E4;border:1px solid #3FA110"></div>${UF_LABELS[uf]}`;
+        hdr.innerHTML = `<div class="region-dot" style="background:rgba(0,229,255,.22);border:1px solid #00E5FF"></div>${UF_LABELS[uf]}`;
         list.appendChild(hdr);
 
         grupo.forEach(feat => {
