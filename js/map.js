@@ -511,7 +511,6 @@ const MapEngine = (() => {
   return {
     render,
     init,
-    loadBrasil:     () => Promise.resolve(),
     zoomIn:         () => map && map.zoomIn(),
     zoomOut:        () => map && map.zoomOut(),
     reset:          () => { activeRegion = null; fitHome(); },

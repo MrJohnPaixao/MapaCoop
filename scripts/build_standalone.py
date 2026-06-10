@@ -23,31 +23,33 @@ def read_data_uri(path, mime_type):
     return f"data:{mime_type};base64,{encoded}"
 
 
-def build_html(include_manifest):
+def build_html(include_manifest, embed_data):
     html = read_text(SOURCE_HTML)
     css = read_text("css/style.css")
     map_js = read_text("js/map.js")
     ui_js = read_text("js/ui.js")
     app_js = read_text("js/app.js")
-    mapa_data = read_text("data/municipios.json")
-    brasil_data = read_text("data/brasil.json")
     logo_uri = read_data_uri("icons/lu-moon.svg", "image/svg+xml")
 
     if not include_manifest:
         html = html.replace('  <link rel="manifest" href="manifest.json">\n', "")
     html = html.replace('src="icons/lu-moon.svg"', f'src="{logo_uri}"')
     html = html.replace('  <link rel="stylesheet" href="css/style.css">', f"  <style>\n{css}\n  </style>")
+
+    scripts = []
+    if embed_data:
+        # Versao standalone: embute os municipios para funcionar sem servidor
+        mapa_data = read_text("data/municipios.json")
+        scripts.append(f"<script>\nwindow.__MAPA_DATA__ = {mapa_data};\n</script>")
+    scripts += [
+        f"<script>\n{map_js}\n</script>",
+        f"<script>\n{ui_js}\n</script>",
+        f"<script>\n{app_js}\n</script>",
+    ]
+
     html = html.replace(
         '<script src="js/map.js"></script>\n<script src="js/ui.js"></script>\n<script src="js/app.js"></script>',
-        "\n".join([
-            "<script>",
-            f"window.__MAPA_DATA__ = {mapa_data};",
-            f"window.__BRASIL_DATA__ = {brasil_data};",
-            "</script>",
-            f"<script>\n{map_js}\n</script>",
-            f"<script>\n{ui_js}\n</script>",
-            f"<script>\n{app_js}\n</script>",
-        ]),
+        "\n".join(scripts),
     )
 
     return html
@@ -60,8 +62,8 @@ def write_output(path, html):
 
 
 def main():
-    write_output(STANDALONE_HTML, build_html(include_manifest=False))
-    write_output(PAGES_HTML, build_html(include_manifest=True))
+    write_output(STANDALONE_HTML, build_html(include_manifest=False, embed_data=True))
+    write_output(PAGES_HTML, build_html(include_manifest=True, embed_data=False))
 
 
 if __name__ == "__main__":

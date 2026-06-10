@@ -47,12 +47,6 @@
   });
 
   /* ─── Inicializar UI ────────────────────────────────── */
-  try {
-    await MapEngine.loadBrasil('./data/brasil.json');
-  } catch (err) {
-    console.warn('[Mapa] Camada Brasil falhou:', err);
-  }
-
   UI.init(data.features, data.meta);
 
   /* ─── Esconder loading ──────────────────────────────── */
