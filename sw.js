@@ -1,5 +1,5 @@
 // Service Worker — MapaCoop Lu System PWA
-const CACHE_NAME  = 'mapacoop-lusystem-v5';
+const CACHE_NAME  = 'mapacoop-lusystem-v6';
 const TILES_CACHE = 'mapacoop-tiles-v1';
 const KEEP_CACHES = [CACHE_NAME, TILES_CACHE];
 
