@@ -27,11 +27,11 @@
     }
   } catch (err) {
     loadingEl.innerHTML = `
-      <div style="text-align:center;padding:20px;color:#3FA110">
+      <div style="text-align:center;padding:20px;color:#C8FF00">
         <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
         <p style="font-family:'Exo 2','Nunito',Arial,sans-serif;margin-bottom:6px;font-weight:700">Erro ao carregar dados</p>
         <small style="color:#6b7280">${err.message}</small><br>
-        <button onclick="location.reload()" style="margin-top:14px;padding:8px 20px;background:#3FA110;color:white;border-radius:20px;border:none;cursor:pointer;font-size:0.85rem">
+        <button onclick="location.reload()" style="margin-top:14px;padding:8px 20px;background:#C8FF00;color:#0A0F1E;border-radius:20px;border:none;cursor:pointer;font-size:0.85rem">
           Tentar novamente
         </button>
       </div>`;
@@ -93,12 +93,55 @@
     document.querySelector('.filter-btn[data-region="todos"]').classList.add('active');
   });
 
+  // Alternância de tema do mapa (Lu System / Escuro clássico)
+  const btnTheme = document.getElementById('btn-theme-toggle');
+  if (btnTheme) {
+    const updateThemeBtn = () => {
+      const isClassic = MapEngine.getTheme() === 'classic';
+      btnTheme.textContent = isClassic ? '◑' : '◐';
+      btnTheme.title = isClassic
+        ? 'Tema: Escuro clássico (clique para Lu System)'
+        : 'Tema: Lu System (clique para Escuro clássico)';
+    };
+    updateThemeBtn();
+    btnTheme.addEventListener('click', () => {
+      MapEngine.setTheme(MapEngine.getTheme() === 'classic' ? 'lusystem' : 'classic');
+      updateThemeBtn();
+    });
+  }
+
   // Sidebar mobile
   document.getElementById('btn-menu').addEventListener('click', UI.openSidebar);
   document.getElementById('sidebar-overlay').addEventListener('click', UI.closeSidebar);
 
+  // Recolher/expandir sidebar esquerda (desktop)
+  const SIDEBAR_COLLAPSE_KEY = 'mapacoop-sidebar-collapsed';
+  const sidebarEl = document.getElementById('sidebar');
+  const btnCollapse = document.getElementById('btn-collapse-sidebar');
+  if (btnCollapse && sidebarEl) {
+    const updateCollapseBtn = () => {
+      const collapsed = sidebarEl.classList.contains('collapsed');
+      btnCollapse.textContent = collapsed ? '›' : '‹';
+      btnCollapse.title = collapsed ? 'Expandir painel' : 'Recolher painel';
+    };
+    if (localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === '1') {
+      sidebarEl.classList.add('collapsed');
+    }
+    updateCollapseBtn();
+    btnCollapse.addEventListener('click', () => {
+      sidebarEl.classList.toggle('collapsed');
+      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, sidebarEl.classList.contains('collapsed') ? '1' : '0');
+      updateCollapseBtn();
+    });
+  }
+
   // Fechar info panel
   document.getElementById('btn-close-info').addEventListener('click', () => {
+    UI.hideInfoPanel();
+    UI.deselectListItem();
+    document.querySelectorAll('.muni-path.selected').forEach(p => p.classList.remove('selected'));
+  });
+  document.getElementById('info-panel-overlay').addEventListener('click', () => {
     UI.hideInfoPanel();
     UI.deselectListItem();
     document.querySelectorAll('.muni-path.selected').forEach(p => p.classList.remove('selected'));
@@ -113,12 +156,18 @@
     }
   });
 
-  // Resize — viewBox cuida do reescalonamento; só atualiza a UI
+  // Resize/orientação — recalcula o viewBox real e refaz o fit do mapa
   let resizeTimer;
-  window.addEventListener('resize', () => {
+  function handleViewportChange() {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => UI.init(data.features, data.meta), 300);
-  });
+    resizeTimer = setTimeout(() => {
+      MapEngine.resize();
+      MapEngine.refitOnResize();
+      UI.init(data.features, data.meta);
+    }, 180);
+  }
+  window.addEventListener('resize', handleViewportChange);
+  window.addEventListener('orientationchange', handleViewportChange);
 
   /* ─── PWA Install Banner ────────────────────────────── */
   let deferredPrompt = null;

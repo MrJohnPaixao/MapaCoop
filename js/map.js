@@ -1,580 +1,538 @@
 /**
- * map.js — Motor de renderização do mapa SVG
- * Zoom/pan via SVG group transform. Labels com tamanho visual fixo (compensação).
- * Bordas com espessura fixa via vector-effect: non-scaling-stroke (CSS).
+ * map.js — MapLibre GL JS engine
+ * Camadas de municípios, moldura de estados (MG/RS/ES), fitBounds,
+ * hover/tooltip, seleção, dim por região.
  */
 
 const MapEngine = (() => {
-  const VW = 960;
-  const VH = 600;
-  const MIN_ZOOM          = 0.75;
-  const MAX_ZOOM          = 120;
-  const WHEEL_ZOOM_IN     = 1.14;
-  const WHEEL_ZOOM_OUT    = 0.88;
-  const BUTTON_ZOOM_IN    = 1.40;
-  const BUTTON_ZOOM_OUT   = 0.72;
-  const REGION_FIT_PAD    = 18;
-  const REGION_FIT_BOOST  = 10;
-  const REGION_MAX_ZOOM   = 90;
-  const LABEL_VIEW_PAD     = 24;
-  const CULL_MIN_ZOOM      = 1.5;
-  const CULL_VIEW_PAD      = 50;
-  const LABEL_PX          = 11;   // tamanho visual desejado dos labels em px de tela
-  const LABEL_ZOOM_THRESH = 2.5;  // zoom mínimo para mostrar labels na visão geral
+  const SOURCE_ID            = 'municipios';
+  const LAYER_FILL_OUTROS    = 'fill-outros';
+  const LAYER_FILL_LIMITROFE = 'fill-limitrofe';
+  const LAYER_FILL_ATUACAO   = 'fill-atuacao';
+  const LAYER_LINE           = 'line-municipios';
+  const LAYER_LABELS         = 'labels-municipios';
+  const LAYER_LABELS_OUTROS  = 'labels-outros';
 
+  // Zoom mínimo garantido ao focar uma região, para que os nomes dos
+  // municípios de atuação (LAYER_LABELS, minzoom: 7) fiquem visíveis
+  const REGION_LABEL_ZOOM   = 7.3;
+
+  const SOURCE_ESTADOS      = 'estados';
+  const LAYER_FILL_ESTADOS  = 'fill-estados';
+  const LAYER_LINE_ESTADOS  = 'line-estados';
+  const ESTADOS_URL         = './data/estados.json';
+
+  // Temas de basemap — "lusystem" (CARTO sem labels, recolorido com a
+  // identidade da marca) é o padrão; "classic" é o dark-matter original do
+  // CARTO, mantido como opção alternável.
+  const STYLE_LUSYSTEM = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
+  const STYLE_CLASSIC  = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+  const THEME_KEY      = 'mapacoop-theme';
+
+  let map              = null;
   let features         = [];
-  let projection       = null;
-  let svgEl            = null;
-  let groupEl          = null;
-  let groupPais        = null;
-  let groupEstados     = null;
-  let groupLabels      = null;
-  let containerEl      = null;
-  let brasilData       = null;
-  let transform        = { x: 0, y: 0, k: 1 };
-  const homeTransform  = { x: 0, y: 0, k: 1 };
-  let activeRegion     = null;
-  let isDragging       = false;
-  let dragStart        = null;
-  let dragTransformStart = null;
-  let lastTouchDist    = null;
   let onSelectCallback = null;
   let selectedId       = null;
-  let interactionSetup = false;
-  let animFrame        = null;
-  let cullTimer        = null;
+  let hoveredId        = null;
+  let activeRegion     = null;
+  let homeBounds       = null;
+  let handlersBound    = false;
+  let currentTheme     = (localStorage.getItem(THEME_KEY) === 'classic') ? 'classic' : 'lusystem';
 
-  /* ─── Projeção (bbox real das geometrias) ─────────────── */
-  function buildProjection(feats, W, H, padding = 32) {
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-
-    function scanCoords(c) {
-      if (!Array.isArray(c)) return;
-      if (typeof c[0] === 'number') {
-        if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0];
-        if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1];
-      } else c.forEach(scanCoords);
-    }
-
-    feats.forEach(f => {
-      if (f.geometry?.coordinates) scanCoords(f.geometry.coordinates);
-    });
-    if (!isFinite(x0)) {
-      feats.forEach(f => {
-        const c = f.centroide; if (!c) return;
-        if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0];
-        if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1];
-      });
-    }
-
-    const bx = (x1 - x0) * 0.05, by = (y1 - y0) * 0.05;
-    x0 -= bx; x1 += bx; y0 -= by; y1 += by;
-    const sx = (W - padding * 2) / (x1 - x0);
-    const sy = (H - padding * 2) / (y1 - y0);
-    const s  = Math.min(sx, sy);
-    const ox = padding + ((W - padding * 2) - (x1 - x0) * s) / 2;
-    const oy = padding + ((H - padding * 2) - (y1 - y0) * s) / 2;
-    return (lon, lat) => [ox + (lon - x0) * s, oy + (y1 - lat) * s];
+  /* ── Lê cores da marca a partir das CSS custom properties ────── */
+  function cssVar(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
   }
 
-  /* ─── Geometry → SVG path string ─────────────────────── */
-  function ringToPath(ring, proj) {
-    if (!ring || ring.length < 2) return '';
-    return ring.map((pt, i) => {
-      const [x, y] = proj(pt[0], pt[1]);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join('') + 'Z';
+  function hexToRgba(hex, alpha) {
+    const h = hex.replace('#', '');
+    const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    const n = parseInt(full, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  function geometryToPath(geom, proj) {
-    if (!geom) return '';
-    const { type, coordinates } = geom;
-    if (type === 'Polygon')      return coordinates.map(r => ringToPath(r, proj)).join(' ');
-    if (type === 'MultiPolygon') return coordinates.map(p => p.map(r => ringToPath(r, proj)).join(' ')).join(' ');
-    return '';
+  function styleUrlFor(theme) {
+    return theme === 'classic' ? STYLE_CLASSIC : STYLE_LUSYSTEM;
   }
 
-  function makeSvgEl(tag) {
-    return document.createElementNS('http://www.w3.org/2000/svg', tag);
-  }
-
-  function projectionFeatures() {
-    const estados = (brasilData?.estados || []).map(estado => ({ geometry: estado.geometry }));
-    return features.concat(estados);
-  }
-
-  function createGroups() {
-    svgEl.innerHTML = '';
-
-    groupPais = makeSvgEl('g');
-    groupPais.id = 'g-brasil-pais';
-    svgEl.appendChild(groupPais);
-
-    groupEstados = makeSvgEl('g');
-    groupEstados.id = 'g-brasil-estados';
-    svgEl.appendChild(groupEstados);
-
-    groupEl = makeSvgEl('g');
-    groupEl.id = 'map-g';
-    svgEl.appendChild(groupEl);
-
-    groupLabels = makeSvgEl('g');
-    groupLabels.id = 'g-labels';
-    svgEl.appendChild(groupLabels);
-  }
-
-  function renderBrasil() {
-    if (!brasilData || !projection || !groupPais || !groupEstados) return;
-
-    const paisPath = makeSvgEl('path');
-    paisPath.setAttribute('d', geometryToPath(brasilData.pais.geometry, projection));
-    paisPath.setAttribute('class', 'brasil-pais');
-    groupPais.appendChild(paisPath);
-
-    const destaques = new Set(brasilData.estados_destaque || ['MG', 'RS']);
-    brasilData.estados.forEach(estado => {
-      const d = geometryToPath(estado.geometry, projection);
-      if (!d) return;
-      const path = makeSvgEl('path');
-      path.setAttribute('d', d);
-      path.setAttribute('class', `brasil-estado${destaques.has(estado.id) ? ' estado-destaque' : ''}`);
-      path.dataset.uf = estado.id;
-      groupEstados.appendChild(path);
-    });
-  }
-
-  /* ─── Render ──────────────────────────────────────────── */
-  function renderMunicipios() {
-    const sorted = [...features].sort((a, b) => {
-      if (a.tipo === 'limitrofe' && b.tipo === 'atuacao') return -1;
-      if (a.tipo === 'atuacao'  && b.tipo === 'limitrofe') return 1;
-      return 0;
-    });
-
-    sorted.forEach(feat => {
-      const d = geometryToPath(feat.geometry, projection);
-      if (!d) return;
-      const path = makeSvgEl('path');
-      path.setAttribute('d', d);
-      path.setAttribute('class', `muni-path ${feat.tipo}`);
-      path.dataset.id     = feat.id;
-      path.dataset.nome   = feat.nome;
-      path.dataset.uf     = feat.uf;
-      path.dataset.tipo   = feat.tipo;
-      path.dataset.regiao = feat.regiao;
-      path.addEventListener('mouseenter', onPathHover);
-      path.addEventListener('mousemove',  onPathMove);
-      path.addEventListener('mouseleave', onPathLeave);
-      path.addEventListener('click',      onPathClick);
-      path.addEventListener('touchstart', onPathTouchStart, { passive: true });
-      path.addEventListener('touchend',   onPathTouchEnd, { passive: true });
-      groupEl.appendChild(path);
-    });
-
-    features.filter(f => f.tipo === 'atuacao').forEach(feat => {
-      if (!feat.centroide) return;
-      const [cx, cy] = projection(feat.centroide[0], feat.centroide[1]);
-      addLabel(cx, cy, feat.nome, feat.regiao);
-    });
-
-  }
-
-  function drawLayers() {
-    createGroups();
-    renderBrasil();
-    renderMunicipios();
-    applyTransform();
-  }
-
-  function render(data, svg, onSelect) {
-    features         = data.features || [];
-    svgEl            = svg;
-    onSelectCallback = onSelect || onSelectCallback;
-    activeRegion     = null;
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-
-    containerEl = svg.closest('#map-container');
-
-    svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-    projection = buildProjection(projectionFeatures(), VW, VH);
-    interactionSetup = false;
-    Object.assign(transform, homeTransform);
-    drawLayers();
-    setupInteraction(containerEl);
-    return features.length;
-  }
-
-  async function loadBrasil(path = './data/brasil.json') {
-    if (window.__BRASIL_DATA__) {
-      brasilData = window.__BRASIL_DATA__;
-    } else {
-      const res = await fetch(path);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      brasilData = await res.json();
-    }
-
-    if (!svgEl || !features.length) return;
-    projection = buildProjection(projectionFeatures(), VW, VH);
-    drawLayers();
-  }
-
-  /* ─── Labels ──────────────────────────────────────────── */
-  function addLabel(cx, cy, nome, regiao) {
-    const text = makeSvgEl('text');
-    text.setAttribute('class', 'muni-label');
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('dominant-baseline', 'middle');
-    text.setAttribute('data-regiao', regiao);
-    text.dataset.svgX = cx.toFixed(2);
-    text.dataset.svgY = cy.toFixed(2);
-    text.style.display = 'none';
-
-    const words = nome.split(' ');
-    if (nome.length > 11 && words.length > 1) {
-      const mid   = Math.ceil(words.length / 2);
-      const line1 = words.slice(0, mid).join(' ');
-      const line2 = words.slice(mid).join(' ');
-      const mkTs  = (txt, dy) => {
-        const ts = makeSvgEl('tspan');
-        ts.setAttribute('x', cx.toFixed(2));
-        ts.setAttribute('dy', dy);
-        ts.textContent = txt;
-        text.appendChild(ts);
-      };
-      text.setAttribute('x', cx.toFixed(2));
-      text.setAttribute('y', cy.toFixed(2));
-      mkTs(line1, '-0.55em');
-      mkTs(line2, '1.1em');
-    } else {
-      text.setAttribute('x', cx.toFixed(2));
-      text.setAttribute('y', cy.toFixed(2));
-      text.textContent = nome;
-    }
-
-    groupLabels.appendChild(text);
-  }
-
-  /* ─── SVG group transform + compensação de labels ─────── */
-  function applyTransform() {
-    if (!groupEl) return;
-    const transformValue = `translate(${transform.x.toFixed(2)},${transform.y.toFixed(2)}) scale(${transform.k.toFixed(4)})`;
-    [groupPais, groupEstados, groupEl, groupLabels].forEach(group => {
-      if (group) group.setAttribute('transform', transformValue);
-    });
-    updateLabelVisibility();
-    scheduleCullOffscreenPaths();
-  }
-
-  function clampZoom(k) {
-    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
-  }
-
-  function updateLabelVisibility() {
-    if (!groupLabels) return;
-    const hasFilter = activeRegion !== null;
-    const zoomedIn  = transform.k >= LABEL_ZOOM_THRESH;
-    const visible = hasFilter || zoomedIn;
-    const fontSize = LABEL_PX / transform.k;
-    const strokeWidth = 0.45 / transform.k;
-    const vx0 = -transform.x / transform.k;
-    const vy0 = -transform.y / transform.k;
-    const vx1 = vx0 + VW / transform.k;
-    const vy1 = vy0 + VH / transform.k;
-
-    groupLabels.querySelectorAll('.muni-label').forEach(el => {
-      const regionOk = hasFilter
-        ? el.getAttribute('data-regiao') === activeRegion
-        : visible;
-      if (!regionOk) {
-        el.style.display = 'none';
-        return;
-      }
-
-      const lx = Number.parseFloat(el.dataset.svgX || el.getAttribute('x') || '0');
-      const ly = Number.parseFloat(el.dataset.svgY || el.getAttribute('y') || '0');
-      const inView = lx > vx0 - LABEL_VIEW_PAD && lx < vx1 + LABEL_VIEW_PAD &&
-                     ly > vy0 - LABEL_VIEW_PAD && ly < vy1 + LABEL_VIEW_PAD;
-
-      el.style.display = inView ? '' : 'none';
-      if (!inView) return;
-
-      el.setAttribute('font-size', fontSize.toFixed(4));
-      el.setAttribute('stroke-width', strokeWidth.toFixed(4));
-      el.querySelectorAll('tspan').forEach(ts => {
-        ts.setAttribute('x', lx.toFixed(2));
-      });
-      const tspans = el.querySelectorAll('tspan');
-      if (tspans.length === 2) {
-        tspans[0].setAttribute('dy', (-fontSize * 0.65).toFixed(3));
-        tspans[1].setAttribute('dy', (fontSize * 1.3).toFixed(3));
-      }
-    });
-  }
-
-  function scheduleCullOffscreenPaths() {
-    clearTimeout(cullTimer);
-    cullTimer = setTimeout(cullOffscreenPaths, 80);
-  }
-
-  function cullOffscreenPaths() {
-    if (!groupEl) return;
-
-    const limitrofePaths = groupEl.querySelectorAll('.muni-path.limitrofe');
-    if (transform.k < CULL_MIN_ZOOM) {
-      limitrofePaths.forEach(path => { path.style.display = ''; });
-      return;
-    }
-
-    const vx0 = -transform.x / transform.k - CULL_VIEW_PAD;
-    const vy0 = -transform.y / transform.k - CULL_VIEW_PAD;
-    const vx1 = vx0 + VW / transform.k + CULL_VIEW_PAD * 2;
-    const vy1 = vy0 + VH / transform.k + CULL_VIEW_PAD * 2;
-
-    limitrofePaths.forEach(path => {
-      try {
-        const bbox = path.getBBox();
-        const inView = bbox.x < vx1 && bbox.x + bbox.width > vx0 &&
-                       bbox.y < vy1 && bbox.y + bbox.height > vy0;
-        path.style.display = inView ? '' : 'none';
-      } catch (_) {
-        path.style.display = '';
-      }
-    });
-  }
-
-  /* ─── Animação suave (easeInOut 380ms) ───────────────── */
-  function animateTo(target, duration = 380) {
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    const start = { ...transform };
-    const t0    = performance.now();
-
-    function step(now) {
-      const p = Math.min(1, (now - t0) / duration);
-      const e = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
-      transform.x = start.x + (target.x - start.x) * e;
-      transform.y = start.y + (target.y - start.y) * e;
-      transform.k = start.k + (target.k - start.k) * e;
-      applyTransform();
-      if (p < 1) animFrame = requestAnimationFrame(step);
-      else animFrame = null;
-    }
-
-    animFrame = requestAnimationFrame(step);
-  }
-
-  /* ─── Converte coord de tela → espaço do viewBox ──────── */
-  function toVB(svg, clientX, clientY) {
-    const rect = svg.getBoundingClientRect();
-    const scale = Math.min(rect.width / VW, rect.height / VH);
-    const offsetX = (rect.width - VW * scale) / 2;
-    const offsetY = (rect.height - VH * scale) / 2;
+  /* ── Constrói GeoJSON FeatureCollection ──────────────────── */
+  function buildGeoJSON(feats) {
     return {
-      x: (clientX - rect.left - offsetX) / scale,
-      y: (clientY - rect.top - offsetY) / scale
+      type: 'FeatureCollection',
+      features: feats.map(f => ({
+        type: 'Feature',
+        id: f.id,
+        properties: { id: f.id, nome: f.nome, uf: f.uf, tipo: f.tipo, regiao: f.regiao },
+        geometry: f.geometry
+      }))
     };
   }
 
-  /* ─── Zoom centrado num ponto do viewBox ──────────────── */
-  function zoomAt(factor, vbX, vbY) {
-    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    const nextK = clampZoom(transform.k * factor);
-    const effectiveFactor = nextK / transform.k;
-    transform.x = vbX - (vbX - transform.x) * effectiveFactor;
-    transform.y = vbY - (vbY - transform.y) * effectiveFactor;
-    transform.k = nextK;
-    applyTransform();
+  /* ── Calcula bbox a partir dos centroides ────────────────── */
+  function calcBounds(feats) {
+    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    feats.forEach(f => {
+      if (!f.centroide) return;
+      const [lng, lat] = f.centroide;
+      if (lng < w) w = lng; if (lng > e) e = lng;
+      if (lat < s) s = lat; if (lat > n) n = lat;
+    });
+    if (!isFinite(w)) return null;
+    return [[w - 0.3, s - 0.3], [e + 0.3, n + 0.3]];
   }
 
-  function resetView() {
-    activeRegion = null;
-    animateTo({ ...homeTransform });
-  }
-
-  /* ─── Fit animado para uma região ────────────────────── */
-  function fitToRegion(regiao) {
-    if (!groupEl) return;
-
-    if (regiao === 'todos') {
-      activeRegion = null;
-      animateTo({ ...homeTransform });
-      return;
+  /* ── Calcula bbox a partir da geometria de uma feature ───── */
+  function boundsFromGeometry(geom) {
+    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    function scan(c) {
+      if (typeof c[0] === 'number') {
+        if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+        if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+      } else {
+        c.forEach(scan);
+      }
     }
+    if (geom && geom.coordinates) scan(geom.coordinates);
+    return isFinite(w) ? [[w, s], [e, n]] : null;
+  }
 
-    activeRegion = regiao;
+  /* ── Expressão de opacidade que respeita dim por região ─── */
+  function opacityExpr(normalVal, dimVal, regionMatchExpr, selectedVal) {
+    const base = regionMatchExpr ? ['case', regionMatchExpr, normalVal, dimVal] : normalVal;
+    if (selectedVal === undefined) return base;
+    return ['case', ['boolean', ['feature-state', 'selected'], false], selectedVal, base];
+  }
 
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
+  /* ── Expressão de match para o filtro de região ─────────── */
+  function regionMatchExpr(regiao) {
+    if (!regiao) return null;
+    const uf = (regiao === 'rs') ? 'RS' : 'MG';
+    return ['any',
+      ['==', ['get', 'regiao'], regiao],
+      ['all', ['==', ['get', 'tipo'], 'limitrofe'], ['==', ['get', 'uf'], uf]]
+    ];
+  }
 
-    features.filter(f => f.regiao === regiao).forEach(f => {
-      const el = groupEl.querySelector(`.muni-path[data-id="${f.id}"]`);
-      if (!el) return;
+  /* ── Adiciona source + layers ────────────────────────────── */
+  function addLayers() {
+    const primary   = cssVar('--lu-primary',   '#C8FF00'); // Lima Lunar — selecionado
+    const secondary = cssVar('--lu-secondary', '#7BFF6A'); // Verde Neon — atuação
+    const accent    = cssVar('--lu-accent',    '#00E5FF'); // Ciano Orbital — limítrofe
+    const muted     = cssVar('--lu-muted',     '#8A9CB5'); // demais municípios
+    const text      = cssVar('--lu-text',      '#FFFFFF');
+
+    map.addSource(SOURCE_ID, {
+      type: 'geojson',
+      data: buildGeoJSON(features),
+      promoteId: 'id'
+    });
+
+    // Demais municípios (fora da área de cobertura) — mais discreto que tudo
+    map.addLayer({
+      id: LAYER_FILL_OUTROS,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'tipo'], 'outro'],
+      paint: {
+        'fill-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], primary,
+          muted
+        ],
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], 0.55,
+          0.06
+        ]
+      }
+    });
+
+    // Limítrofes — fundo, tom neutro
+    map.addLayer({
+      id: LAYER_FILL_LIMITROFE,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'tipo'], 'limitrofe'],
+      paint: {
+        'fill-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], primary,
+          accent
+        ],
+        'fill-opacity': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], 0.55,
+          0.15
+        ]
+      }
+    });
+
+    // Municípios de atuação — destaque verde
+    map.addLayer({
+      id: LAYER_FILL_ATUACAO,
+      type: 'fill',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'tipo'], 'atuacao'],
+      paint: {
+        'fill-color': [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false], primary,
+          secondary
+        ],
+        'fill-opacity': 0.65
+      }
+    });
+
+    // Bordas de todos os municípios
+    map.addLayer({
+      id: LAYER_LINE,
+      type: 'line',
+      source: SOURCE_ID,
+      paint: {
+        'line-color': [
+          'match', ['get', 'tipo'],
+          'atuacao',   'rgba(11, 59, 38, 0.85)',
+          'limitrofe', hexToRgba(accent, 0.50),
+          'outro',     hexToRgba(muted, 0.20),
+          'rgba(0, 0, 0, 0.3)'
+        ],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.35, 9, 0.9, 12, 1.5]
+      }
+    });
+
+    // Labels dos municípios de atuação (aparecem a partir do zoom 7)
+    map.addLayer({
+      id: LAYER_LABELS,
+      type: 'symbol',
+      source: SOURCE_ID,
+      filter: ['==', ['get', 'tipo'], 'atuacao'],
+      minzoom: 7,
+      layout: {
+        'text-field': ['get', 'nome'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 7, 9, 11, 13],
+        'text-font': ['Noto Sans Regular', 'Arial Unicode MS Regular'],
+        'text-max-width': 8,
+        'text-allow-overlap': false
+      },
+      paint: {
+        'text-color': text,
+        'text-halo-color': 'rgba(0, 0, 0, 0.85)',
+        'text-halo-width': 1.5
+      }
+    });
+
+    // Labels dos demais municípios (limítrofes e outros) — discretos,
+    // só aparecem com mais zoom para não competir com a área de atuação
+    map.addLayer({
+      id: LAYER_LABELS_OUTROS,
+      type: 'symbol',
+      source: SOURCE_ID,
+      filter: ['!=', ['get', 'tipo'], 'atuacao'],
+      minzoom: 9,
+      layout: {
+        'text-field': ['get', 'nome'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 9, 8, 13, 11],
+        'text-font': ['Noto Sans Regular', 'Arial Unicode MS Regular'],
+        'text-max-width': 8,
+        'text-allow-overlap': false,
+        'text-optional': true
+      },
+      paint: {
+        'text-color': muted,
+        'text-halo-color': 'rgba(0, 0, 0, 0.75)',
+        'text-halo-width': 1
+      }
+    });
+  }
+
+  /* ── Moldura dos estados (MG, RS, ES) — fundo, abaixo dos municípios ── */
+  function addEstadosLayer(geojson) {
+    if (map.getSource(SOURCE_ESTADOS)) return;
+
+    const accent = cssVar('--lu-accent', '#00E5FF'); // Ciano Orbital
+
+    map.addSource(SOURCE_ESTADOS, {
+      type: 'geojson',
+      data: geojson
+    });
+
+    // Preenchimento sutil — não compete com os municípios
+    map.addLayer({
+      id: LAYER_FILL_ESTADOS,
+      type: 'fill',
+      source: SOURCE_ESTADOS,
+      paint: {
+        'fill-color': accent,
+        'fill-opacity': 0.04
+      }
+    }, LAYER_FILL_OUTROS);
+
+    // Contorno de estado — mais marcado que as bordas de município
+    map.addLayer({
+      id: LAYER_LINE_ESTADOS,
+      type: 'line',
+      source: SOURCE_ESTADOS,
+      paint: {
+        'line-color': hexToRgba(accent, 0.55),
+        'line-width': ['interpolate', ['linear'], ['zoom'], 4, 0.7, 8, 1.4, 12, 2.2],
+        'line-dasharray': [2, 1.5]
+      }
+    }, LAYER_FILL_OUTROS);
+  }
+
+  function loadEstados() {
+    if (map.getSource(SOURCE_ESTADOS)) return;
+    fetch(ESTADOS_URL)
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`)))
+      .then(geojson => addEstadosLayer(geojson))
+      .catch(err => console.warn('[Mapa] Camada de estados falhou:', err));
+  }
+
+  /* ── Recolore o basemap CARTO com a paleta Lu System ─────────── */
+  function applyBrandBasemap() {
+    const bg    = cssVar('--lu-bg',     '#0A0F1E'); // Deep Space
+    const bgMid = cssVar('--lu-bg-mid', '#132040'); // Midnight
+    const muted = cssVar('--lu-muted',  '#8A9CB5');
+
+    const style = map.getStyle();
+    if (!style || !style.layers) return;
+
+    style.layers.forEach(layer => {
+      const id = layer.id;
       try {
-        const b = el.getBBox();
-        if (b.x           < minX) minX = b.x;
-        if (b.x + b.width  > maxX) maxX = b.x + b.width;
-        if (b.y           < minY) minY = b.y;
-        if (b.y + b.height > maxY) maxY = b.y + b.height;
-      } catch (_) {}
+        if (id === 'background') {
+          map.setPaintProperty(id, 'background-color', bg);
+        } else if (layer.type === 'fill' && /^(landcover|landuse|park)/.test(id)) {
+          map.setPaintProperty(id, 'fill-color', bg);
+        } else if (layer.type === 'fill' && /^water/.test(id)) {
+          map.setPaintProperty(id, 'fill-color', bgMid);
+        } else if (layer.type === 'fill' && id === 'building-top') {
+          map.setPaintProperty(id, 'fill-color', bgMid);
+        } else if (layer.type === 'line' && /^(road|bridge|tunnel|rail|boundary|aeroway|waterway)/.test(id)) {
+          map.setPaintProperty(id, 'line-color', muted);
+          map.setPaintProperty(id, 'line-opacity', 0.18);
+        }
+      } catch (err) {
+        // algumas combinações layer/propriedade podem não existir — ignora
+      }
+    });
+  }
+
+  /* ── Hover: cursor + tooltip ─────────────────────────────── */
+  function setupHover() {
+    const layers = [LAYER_FILL_ATUACAO, LAYER_FILL_LIMITROFE, LAYER_FILL_OUTROS];
+
+    layers.forEach(layer => {
+      map.on('mousemove', layer, e => {
+        if (!e.features.length) return;
+        map.getCanvas().style.cursor = 'pointer';
+        const f = e.features[0];
+        if (hoveredId !== null && hoveredId !== f.id) {
+          map.setFeatureState({ source: SOURCE_ID, id: hoveredId }, { hover: false });
+        }
+        hoveredId = f.id;
+        map.setFeatureState({ source: SOURCE_ID, id: hoveredId }, { hover: true });
+        const p = f.properties;
+        if (typeof UI !== 'undefined') {
+          UI.showTooltip(p.nome, p.uf, p.tipo);
+          UI.moveTooltip(e.originalEvent);
+        }
+      });
+
+      map.on('mouseleave', layer, () => {
+        map.getCanvas().style.cursor = '';
+        if (hoveredId !== null) {
+          map.setFeatureState({ source: SOURCE_ID, id: hoveredId }, { hover: false });
+        }
+        hoveredId = null;
+        if (typeof UI !== 'undefined') UI.hideTooltip();
+      });
+    });
+  }
+
+  /* ── Click: seleciona município ──────────────────────────── */
+  function setupClick() {
+    const layers = [LAYER_FILL_ATUACAO, LAYER_FILL_LIMITROFE, LAYER_FILL_OUTROS];
+    layers.forEach(layer => {
+      map.on('click', layer, e => {
+        if (!e.features.length) return;
+        e.originalEvent.stopPropagation();
+        const f = e.features[0];
+        const feat = features.find(ft => ft.id === f.id);
+        selectById(f.id, feat || f.properties);
+      });
     });
 
-    if (!isFinite(minX) || maxX <= minX || maxY <= minY) return;
-
-    const pad  = REGION_FIT_PAD;
-    const kFit = Math.min(
-      (VW - pad * 2) / (maxX - minX),
-      (VH - pad * 2) / (maxY - minY)
-    );
-    const k  = Math.min(REGION_MAX_ZOOM, Math.max(LABEL_ZOOM_THRESH, kFit * REGION_FIT_BOOST));
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    animateTo({ x: VW / 2 - cx * k, y: VH / 2 - cy * k, k });
-  }
-
-  /* ─── Interação ──────────────────────────────────────── */
-  function setupInteraction(container) {
-    if (interactionSetup) return;
-    interactionSetup = true;
-
-    // Wheel → zoom centrado no cursor
-    container.addEventListener('wheel', e => {
-      e.preventDefault();
-      const pt = toVB(svgEl, e.clientX, e.clientY);
-      zoomAt(e.deltaY < 0 ? WHEEL_ZOOM_IN : WHEEL_ZOOM_OUT, pt.x, pt.y);
-    }, { passive: false });
-
-    // Mouse → pan
-    container.addEventListener('mousedown', e => {
-      if (e.button !== 0) return;
-      isDragging = true;
-      dragStart = toVB(svgEl, e.clientX, e.clientY);
-      dragTransformStart = { ...transform };
-      container.style.cursor = 'grabbing';
+    // Click fora dos municípios: deseleciona
+    map.on('click', e => {
+      const hits = map.queryRenderedFeatures(e.point, { layers });
+      if (!hits.length) {
+        if (selectedId !== null) selectById(selectedId, null);
+      }
     });
-
-    window.addEventListener('mousemove', e => {
-      if (!isDragging) return;
-      if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-      const pt = toVB(svgEl, e.clientX, e.clientY);
-      transform.x = dragTransformStart.x + (pt.x - dragStart.x);
-      transform.y = dragTransformStart.y + (pt.y - dragStart.y);
-      applyTransform();
-    });
-
-    window.addEventListener('mouseup', () => {
-      isDragging = false;
-      if (containerEl) containerEl.style.cursor = '';
-    });
-
-    // Touch → pan + pinch-zoom
-    container.addEventListener('touchstart', e => {
-      if (e.touches.length === 1) {
-        isDragging = true;
-        dragStart = toVB(svgEl, e.touches[0].clientX, e.touches[0].clientY);
-        dragTransformStart = { ...transform };
-        lastTouchDist = null;
-      }
-      if (e.touches.length === 2) {
-        isDragging = false;
-        lastTouchDist = touchDist(e.touches);
-      }
-    }, { passive: true });
-
-    container.addEventListener('touchmove', e => {
-      e.preventDefault();
-      if (e.touches.length === 1 && isDragging) {
-        if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-        const pt = toVB(svgEl, e.touches[0].clientX, e.touches[0].clientY);
-        transform.x = dragTransformStart.x + (pt.x - dragStart.x);
-        transform.y = dragTransformStart.y + (pt.y - dragStart.y);
-        applyTransform();
-      }
-      if (e.touches.length === 2 && lastTouchDist) {
-        const dist = touchDist(e.touches);
-        const t0 = toVB(svgEl, e.touches[0].clientX, e.touches[0].clientY);
-        const t1 = toVB(svgEl, e.touches[1].clientX, e.touches[1].clientY);
-        zoomAt(dist / lastTouchDist, (t0.x + t1.x) / 2, (t0.y + t1.y) / 2);
-        lastTouchDist = dist;
-      }
-    }, { passive: false });
-
-    container.addEventListener('touchend', () => {
-      isDragging = false;
-      lastTouchDist = null;
-    }, { passive: true });
   }
 
-  function touchDist(touches) {
-    return Math.hypot(
-      touches[0].clientX - touches[1].clientX,
-      touches[0].clientY - touches[1].clientY
-    );
-  }
-
-  /* ─── Hover / Select ──────────────────────────────────── */
-  function onPathHover(e) {
-    const d = e.currentTarget.dataset;
-    UI.showTooltip(d.nome, d.uf, d.tipo);
-    UI.moveTooltip(e);
-  }
-  function onPathMove(e)  { UI.moveTooltip(e); }
-  function onPathLeave()  { UI.hideTooltip(); }
-
-  function onPathClick(e) {
-    e.stopPropagation();
-    selectById(e.currentTarget.dataset.id, e.currentTarget.dataset);
-  }
-  function onPathTouchStart(e) {
-    e.stopPropagation();
-    const d = e.currentTarget.dataset;
-    UI.showTooltip(d.nome, d.uf, d.tipo);
-    if (e.touches.length) UI.moveTooltip(e.touches[0]);
-  }
-  function onPathTouchEnd(e) {
-    setTimeout(() => UI.hideTooltip(), 1200);
-    if (e.changedTouches.length === 1) {
-      selectById(e.currentTarget.dataset.id, e.currentTarget.dataset);
+  /* ── fitBounds na view home ──────────────────────────────── */
+  function fitHome(opts) {
+    if (homeBounds && map) {
+      map.fitBounds(homeBounds, Object.assign({ padding: 40, duration: 400 }, opts || {}));
     }
   }
 
+  /* ── Reaplica seleção e filtro de região após troca de estilo ── */
+  function reapplyState() {
+    if (selectedId !== null && map.getSource(SOURCE_ID)) {
+      map.setFeatureState({ source: SOURCE_ID, id: selectedId }, { selected: true });
+    }
+    if (activeRegion) filterByRegion(activeRegion);
+  }
+
+  /* ── Executado a cada (re)carregamento de estilo ─────────── */
+  function onStyleLoad() {
+    if (currentTheme === 'lusystem') applyBrandBasemap();
+    addLayers();
+    loadEstados();
+    if (!handlersBound) {
+      setupHover();
+      setupClick();
+      handlersBound = true;
+    }
+    reapplyState();
+  }
+
+  /* ── init / render ───────────────────────────────────────── */
+  function init(data, _ignoredEl, onSelect) {
+    features         = (data && data.features) ? data.features : [];
+    onSelectCallback = onSelect || null;
+    homeBounds       = calcBounds(features);
+
+    map = new maplibregl.Map({
+      container: 'map',
+      style: styleUrlFor(currentTheme),
+      bounds: homeBounds,
+      fitBoundsOptions: { padding: 40 },
+      attributionControl: { compact: true }
+    });
+
+    map.on('style.load', onStyleLoad);
+
+    return map;
+  }
+
+  function render(data, _el, onSelect) {
+    init(data, null, onSelect);
+    return features.length;
+  }
+
+  /* ── Seleciona feature ───────────────────────────────────── */
   function selectById(id, data) {
-    document.querySelectorAll('.muni-path.selected').forEach(p => p.classList.remove('selected'));
+    if (selectedId !== null) {
+      if (map && map.getSource(SOURCE_ID)) {
+        map.setFeatureState({ source: SOURCE_ID, id: selectedId }, { selected: false });
+      }
+    }
+
     if (selectedId === id) {
       selectedId = null;
-      UI.hideInfoPanel();
-      UI.deselectListItem();
+      if (typeof UI !== 'undefined') { UI.hideInfoPanel(); UI.deselectListItem(); }
       return;
     }
+
     selectedId = id;
-    const path = groupEl && groupEl.querySelector(`.muni-path[data-id="${id}"]`);
-    if (path) path.classList.add('selected');
-    UI.showInfoPanel(data || {});
-    UI.selectListItem(id);
+    if (map && map.getSource(SOURCE_ID)) {
+      map.setFeatureState({ source: SOURCE_ID, id }, { selected: true });
+    }
+    if (typeof UI !== 'undefined') { UI.showInfoPanel(data || {}); UI.selectListItem(id); }
+
+    // Zoom/destaque no município selecionado
+    const feat = features.find(f => f.id === id);
+    if (feat && feat.geometry && map) {
+      const bounds = boundsFromGeometry(feat.geometry);
+      if (bounds) map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 600 });
+    }
+
     if (onSelectCallback) onSelectCallback(id, data);
   }
 
-  /* ─── Filter / dim ────────────────────────────────────── */
+  /* ── Filtra por região (dim) ─────────────────────────────── */
   function filterByRegion(regiao) {
-    document.querySelectorAll('.muni-path').forEach(path => {
-      if (!regiao) { path.classList.remove('dimmed'); return; }
-      const matches = path.dataset.regiao === regiao ||
-        (path.dataset.tipo === 'limitrofe' &&
-         (regiao === 'rs' ? path.dataset.uf === 'RS' : path.dataset.uf === 'MG'));
-      path.classList.toggle('dimmed', !matches);
+    if (!map) return;
+    activeRegion = regiao || null;
+    const matchEx = regionMatchExpr(regiao);
+
+    const atuOpacity    = opacityExpr(0.65, 0.07,  matchEx);
+    const limOpacity    = opacityExpr(0.15, 0.05,  matchEx, 0.55);
+    const outrosOpacity = opacityExpr(0.06, 0.015, matchEx, 0.55);
+    const lineOpacity   = opacityExpr(1.0,  0.07,  matchEx);
+
+    if (map.getLayer(LAYER_FILL_ATUACAO))   map.setPaintProperty(LAYER_FILL_ATUACAO,   'fill-opacity', atuOpacity);
+    if (map.getLayer(LAYER_FILL_LIMITROFE)) map.setPaintProperty(LAYER_FILL_LIMITROFE, 'fill-opacity', limOpacity);
+    if (map.getLayer(LAYER_FILL_OUTROS))    map.setPaintProperty(LAYER_FILL_OUTROS,    'fill-opacity', outrosOpacity);
+    if (map.getLayer(LAYER_LINE))           map.setPaintProperty(LAYER_LINE,            'line-opacity', lineOpacity);
+  }
+
+  /* ── Fit para uma região ─────────────────────────────────── */
+  function fitToRegion(regiao) {
+    if (!map) return;
+    if (regiao === 'todos') {
+      activeRegion = null;
+      fitHome();
+      return;
+    }
+    activeRegion = regiao;
+    // Usa apenas os municípios de atuação da própria zona — limítrofes têm
+    // regiao vazia e cobrem o estado inteiro, o que centralizava o foco
+    // no meio de MG em vez da zona oeste/leste específica.
+    const regional = features.filter(f => f.regiao === regiao);
+    const bounds = calcBounds(regional);
+    if (!bounds) return;
+    map.fitBounds(bounds, { padding: 60, maxZoom: 10, duration: 500 });
+    // Garante zoom suficiente para os nomes dos municípios aparecerem
+    // (rótulos de atuação a partir do zoom 7)
+    map.once('moveend', () => {
+      if (map.getZoom() < REGION_LABEL_ZOOM) {
+        map.easeTo({ zoom: REGION_LABEL_ZOOM, duration: 300 });
+      }
     });
   }
 
-  /* ─── API pública ─────────────────────────────────────── */
+  /* ── API pública ─────────────────────────────────────────── */
   return {
     render,
-    loadBrasil,
-    zoomIn:  () => zoomAt(BUTTON_ZOOM_IN, VW / 2, VH / 2),
-    zoomOut: () => zoomAt(BUTTON_ZOOM_OUT, VW / 2, VH / 2),
-    reset:   resetView,
-    filter:  filterByRegion,
+    init,
+    loadBrasil:     () => Promise.resolve(),
+    zoomIn:         () => map && map.zoomIn(),
+    zoomOut:        () => map && map.zoomOut(),
+    reset:          () => { activeRegion = null; fitHome(); },
+    resize:         () => map && map.resize(),
+
+    /* Re-enquadra após mudança real de viewport (resize/orientação) —
+       mantém o município selecionado em foco, ou volta à área home. */
+    refitOnResize: () => {
+      if (!map) return;
+      if (selectedId !== null) {
+        const feat = features.find(f => f.id === selectedId);
+        const bounds = feat && feat.geometry ? boundsFromGeometry(feat.geometry) : null;
+        if (bounds) {
+          map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 0 });
+          return;
+        }
+      }
+      if (!activeRegion) fitHome({ duration: 0 });
+    },
+    filter:         filterByRegion,
     fitToRegion,
-    select:  selectById,
-    getFeatureById: id => features.find(f => f.id === id)
+    select:         selectById,
+    getFeatureById: id => features.find(f => f.id === id),
+    getTheme:       () => currentTheme,
+    setTheme: theme => {
+      const next = (theme === 'classic') ? 'classic' : 'lusystem';
+      if (next === currentTheme) return;
+      currentTheme = next;
+      localStorage.setItem(THEME_KEY, currentTheme);
+      if (map) map.setStyle(styleUrlFor(currentTheme));
+    }
   };
 })();

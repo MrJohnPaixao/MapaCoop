@@ -4,9 +4,9 @@
 
 const UI = (() => {
   const REGIAO_CORES = {
-    'mg-oeste': '#3FA110',
-    'mg-leste': '#64C832',
-    'rs':       '#2F7D0C'
+    'mg-oeste': '#C8FF00',
+    'mg-leste': '#7BFF6A',
+    'rs':       '#00E5FF'
   };
 
   const REGIAO_LABELS = {
@@ -46,11 +46,44 @@ const UI = (() => {
     buildList();
   }
 
+  const TIPO_ICONS = { atuacao: '📍', limitrofe: '○', outro: '·' };
+  const MAX_RESULTADOS_BUSCA = 100;
+
   /* ─── Lista Sidebar ───────────────────────────────────── */
   function buildList(query = '') {
     const list = document.getElementById('municipio-list');
     list.innerHTML = '';
     const q = normalize(query);
+
+    // Busca: procura em TODOS os municípios (atuação, limítrofe e outros),
+    // independente da aba selecionada.
+    if (q) {
+      const resultados = allFeatures
+        .filter(f => normalize(f.nome).includes(q))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+      if (!resultados.length) {
+        list.innerHTML = '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:0.8rem">Nenhum município encontrado</div>';
+        return;
+      }
+
+      const hdr = document.createElement('div');
+      hdr.className = 'region-header';
+      hdr.textContent = `${resultados.length} resultado${resultados.length > 1 ? 's' : ''}`;
+      list.appendChild(hdr);
+
+      resultados.slice(0, MAX_RESULTADOS_BUSCA).forEach(f => {
+        list.appendChild(makeListItem(f.nome, f.id, TIPO_ICONS[f.tipo] || '·'));
+      });
+
+      if (resultados.length > MAX_RESULTADOS_BUSCA) {
+        const more = document.createElement('div');
+        more.style.cssText = 'padding:8px 12px;text-align:center;color:#9ca3af;font-size:0.72rem';
+        more.textContent = `+${resultados.length - MAX_RESULTADOS_BUSCA} outros — refine a busca`;
+        list.appendChild(more);
+      }
+      return;
+    }
 
     if (currentTab === 'atuacao') {
       ['mg-oeste', 'mg-leste', 'rs'].forEach(regId => {
@@ -78,7 +111,7 @@ const UI = (() => {
 
         const hdr = document.createElement('div');
         hdr.className = 'region-header';
-        hdr.innerHTML = `<div class="region-dot" style="background:#EAF6E4;border:1px solid #3FA110"></div>${UF_LABELS[uf]}`;
+        hdr.innerHTML = `<div class="region-dot" style="background:rgba(0,229,255,.22);border:1px solid #00E5FF"></div>${UF_LABELS[uf]}`;
         list.appendChild(hdr);
 
         grupo.forEach(feat => {
@@ -132,7 +165,9 @@ const UI = (() => {
     document.getElementById('tt-uf').textContent = UF_LABELS[uf] || uf;
     const tagEl = document.getElementById('tt-tag');
     tagEl.className = `tt-tag ${tipo}`;
-    tagEl.textContent = tipo === 'atuacao' ? '✅ Área de atuação' : '📍 Município limítrofe';
+    tagEl.textContent = tipo === 'atuacao'   ? '✅ Área de atuação'
+                       : tipo === 'limitrofe' ? '📍 Município limítrofe'
+                       : '⚪ Fora da área de cobertura';
     tt().classList.add('visible');
   }
 
@@ -163,12 +198,105 @@ const UI = (() => {
     document.getElementById('ip-nome').textContent   = data.nome || '—';
     document.getElementById('ip-estado').textContent = UF_LABELS[data.uf] || data.uf || '—';
     document.getElementById('ip-regiao').textContent = REGIAO_LABELS[data.regiao] || (data.tipo === 'limitrofe' ? 'Limítrofe' : '—');
-    document.getElementById('ip-tipo').textContent   = data.tipo === 'atuacao' ? '✅ Área de Atuação' : '📍 Limítrofe';
+    document.getElementById('ip-tipo').textContent   = data.tipo === 'atuacao'   ? '✅ Área de Atuação'
+                                                       : data.tipo === 'limitrofe' ? '📍 Limítrofe'
+                                                       : '⚪ Fora da área de cobertura';
+    document.getElementById('ip-indicadores').innerHTML = renderIndicadores(data.indicadores);
     document.getElementById('info-panel').classList.add('visible');
+    document.getElementById('info-panel-overlay').classList.add('open');
+  }
+
+  /* ─── Indicadores técnicos (Censo 2022 / PIB Municípios) ─ */
+  function fmtInt(n) {
+    return Math.round(n).toLocaleString('pt-BR');
+  }
+  function fmtDec(n, casas = 1) {
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+  }
+  function fmtBRL(n) {
+    return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+  }
+
+  function indRow(label, valueHtml, available = true) {
+    const cls = available ? 'ind-val' : 'ind-val na';
+    const val = available ? valueHtml : 'dado indisponível';
+    return `<div class="ind-row"><span>${label}</span><span class="${cls}">${val}</span></div>`;
+  }
+
+  function renderIndicadores(ind) {
+    if (!ind) return '';
+    let html = '';
+
+    // População
+    html += '<div class="ind-section"><div class="ind-section-title">População</div>';
+    const pop = ind.populacao || {};
+    html += indRow('Total', pop.valor != null ? `${fmtInt(pop.valor)} hab.` : null, pop.valor != null);
+
+    const urb = ind.populacao_urbana || {}, rur = ind.populacao_rural || {};
+    if (urb.valor != null && rur.valor != null) {
+      html += indRow('Urbana', `${fmtInt(urb.valor)} hab.`);
+      html += indRow('Rural', `${fmtInt(rur.valor)} hab.`);
+    } else {
+      html += indRow('Urbana / Rural', null, false);
+    }
+
+    const sexo = ind.populacao_por_sexo || {};
+    if (sexo.homens != null && sexo.mulheres != null) {
+      html += indRow('Homens', `${fmtInt(sexo.homens)} hab.`);
+      html += indRow('Mulheres', `${fmtInt(sexo.mulheres)} hab.`);
+    } else {
+      html += indRow('Por sexo', null, false);
+    }
+
+    const fe = ind.faixa_etaria || {};
+    if (fe['0_14'] != null && fe['15_64'] != null && fe['65_mais'] != null) {
+      html += indRow('0–14 anos', `${fmtInt(fe['0_14'])} hab.`);
+      html += indRow('15–64 anos', `${fmtInt(fe['15_64'])} hab.`);
+      html += indRow('65+ anos', `${fmtInt(fe['65_mais'])} hab.`);
+    } else {
+      html += indRow('Faixa etária', null, false);
+    }
+    html += `<div class="ind-source">Fonte: ${pop.fonte || 'IBGE'}${pop.ano ? ` (${pop.ano})` : ''}</div>`;
+    html += '</div>';
+
+    // Território
+    html += '<div class="ind-section"><div class="ind-section-title">Território</div>';
+    const area = ind.area_km2 || {}, dens = ind.densidade || {};
+    html += indRow('Área', area.valor != null ? `${fmtDec(area.valor, 1)} km²` : null, area.valor != null);
+    html += indRow('Densidade', dens.valor != null ? `${fmtDec(dens.valor, 1)} hab/km²` : null, dens.valor != null);
+    html += `<div class="ind-source">Fonte: ${area.fonte || 'IBGE'}${area.ano ? ` (${area.ano})` : ''}</div>`;
+    html += '</div>';
+
+    // Trabalho
+    html += '<div class="ind-section"><div class="ind-section-title">Trabalho</div>';
+    const trab = ind.trabalho || {};
+    if (trab.populacao_ocupada != null) {
+      html += indRow('Pessoas ocupadas', `${fmtInt(trab.populacao_ocupada)} hab.`);
+      html += indRow('Pop. 10 anos+', `${fmtInt(trab.pop_10_anos_ou_mais)} hab.`);
+      html += indRow('Nível de ocupação', `${fmtDec(trab.nivel_ocupacao_pct, 1)}%`);
+    } else {
+      html += indRow('Ocupação', null, false);
+    }
+    html += `<div class="ind-source">Fonte: ${trab.fonte || 'IBGE'}${trab.ano ? ` (${trab.ano})` : ''}</div>`;
+    html += '</div>';
+
+    // Economia
+    html += '<div class="ind-section"><div class="ind-section-title">Economia</div>';
+    const pib = ind.pib || {}, pibPc = ind.pib_per_capita || {};
+    html += indRow('PIB municipal', pib.valor != null ? fmtBRL(pib.valor * 1000) : null, pib.valor != null);
+    html += indRow('PIB per capita', pibPc.valor != null ? `${fmtBRL(pibPc.valor)} *` : null, pibPc.valor != null);
+    html += `<div class="ind-source">Fonte: ${pib.fonte || 'IBGE'}${pib.ano ? ` (${pib.ano})` : ''}`;
+    if (pibPc.valor != null) {
+      html += `<br>* Estimativa: ${pibPc.calculo} (${pibPc.ano})`;
+    }
+    html += '</div></div>';
+
+    return html;
   }
 
   function hideInfoPanel() {
     document.getElementById('info-panel').classList.remove('visible');
+    document.getElementById('info-panel-overlay').classList.remove('open');
   }
 
   /* ─── Sidebar mobile ──────────────────────────────────── */

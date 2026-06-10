@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Mapa interativo da area de atuacao Sicredi">
-  <meta name="theme-color" content="#3FA110">
+  <meta name="description" content="MapaCoop Lu System: mapa interativo da area de atuacao cooperativa">
+  <meta name="theme-color" content="#0A0F1E">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Mapa Sicredi">
+  <meta name="apple-mobile-web-app-title" content="MapaCoop">
 
-  <title>Mapa de Atuacao Sicredi</title>
+  <title>MapaCoop Lu System</title>
 
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -18,7 +18,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=Exo+2:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -27,10 +27,13 @@
 <!-- ── Header ──────────────────────────────────────────── -->
 <header id="header">
   <button id="btn-menu" aria-label="Abrir menu">☰</button>
-  <img class="logo" src="icons/sicredi-horizontal-box-rgb.png" alt="Sicredi">
+  <div class="brand-lockup" aria-label="Lu System">
+    <img class="logo-mark" src="icons/lu-moon.svg" alt="">
+    <div class="wordmark"><span class="lu">LU</span> <span class="system">SYSTEM</span></div>
+  </div>
   <div class="header-text">
-    <h1>Area de Atuacao</h1>
-    <p>Mapa Interativo Sicredi</p>
+    <h1>MapaCoop</h1>
+    <p>Inteligencia territorial cooperativa</p>
   </div>
   <div class="header-badges">
     <div class="badge">
@@ -48,29 +51,34 @@
 
   <!-- Sidebar -->
   <aside id="sidebar">
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="atuacao">✅ Atuação</button>
-      <button class="tab-btn"        data-tab="limitrofe">📍 Limítrofes</button>
-    </div>
-
-    <div class="search-wrap">
-      <input type="search" id="search-input" placeholder="Buscar município..." autocomplete="off" autocorrect="off">
-    </div>
-
-    <div id="municipio-list" role="list"></div>
-
-    <div class="sidebar-legend">
-      <div class="legend-title">Legenda</div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:#2F7D0C;border:1.5px solid #133A08"></div>
-        Municípios de atuação
+    <div class="sidebar-inner">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="atuacao">✅ Atuação</button>
+        <button class="tab-btn"        data-tab="limitrofe">📍 Limítrofes</button>
       </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:#DCEFD4;border:1px solid #5E8F50"></div>
-        Municípios limítrofes
+
+      <div class="search-wrap">
+        <input type="search" id="search-input" placeholder="Buscar município..." autocomplete="off" autocorrect="off">
+      </div>
+
+      <div id="municipio-list" role="list"></div>
+
+      <div class="sidebar-legend">
+        <div class="legend-title">Legenda</div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#7BFF6A;border:1.5px solid #0B3B26"></div>
+          Municípios de atuação
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:rgba(0,229,255,.28);border:1px solid rgba(0,229,255,.72)"></div>
+          Municípios limítrofes
+        </div>
       </div>
     </div>
   </aside>
+
+  <!-- Botão para recolher/expandir a sidebar esquerda (desktop) -->
+  <button id="btn-collapse-sidebar" title="Recolher painel" aria-label="Recolher painel">‹</button>
 
   <!-- Main -->
   <main id="main">
@@ -108,15 +116,6 @@
         <div id="tt-uf"></div>
         <div id="tt-tag"></div>
       </div>
-
-      <!-- Info panel -->
-      <div id="info-panel" role="complementary">
-        <button id="btn-close-info" aria-label="Fechar">✕</button>
-        <h3 id="ip-nome"></h3>
-        <div class="info-row"><span>Estado</span><strong id="ip-estado"></strong></div>
-        <div class="info-row"><span>Região</span><strong id="ip-regiao"></strong></div>
-        <div class="info-row"><span>Tipo</span><strong id="ip-tipo"></strong></div>
-      </div>
     </div>
 
     <!-- Stats bar -->
@@ -128,6 +127,21 @@
     </div>
 
   </main>
+
+  <!-- Info panel overlay (mobile) -->
+  <div id="info-panel-overlay"></div>
+
+  <!-- Info panel (sidebar direita) -->
+  <aside id="info-panel" role="complementary">
+    <div class="info-panel-inner">
+      <button id="btn-close-info" aria-label="Fechar">✕</button>
+      <h3 id="ip-nome"></h3>
+      <div class="info-row"><span>Estado</span><strong id="ip-estado"></strong></div>
+      <div class="info-row"><span>Região</span><strong id="ip-regiao"></strong></div>
+      <div class="info-row"><span>Tipo</span><strong id="ip-tipo"></strong></div>
+      <div id="ip-indicadores"></div>
+    </div>
+  </aside>
 </div>
 
 <!-- Toast -->
