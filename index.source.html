@@ -20,6 +20,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=Exo+2:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 
+  <link rel="stylesheet" href="lib/maplibre-gl.css">
+  <script src="lib/maplibre-gl.js"></script>
+
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -32,7 +35,7 @@
     <div class="wordmark"><span class="lu">LU</span> <span class="system">SYSTEM</span></div>
   </div>
   <div class="header-text">
-    <h1>MapaCoop</h1>
+    <h1>MapaCoop <span class="brand-sub">Sicredi</span></h1>
     <p>Inteligencia territorial cooperativa</p>
   </div>
   <div class="header-badges">
@@ -105,9 +108,9 @@
         <small>Preparando dados geográficos</small>
       </div>
 
-      <!-- SVG Map -->
+      <!-- Map -->
       <div id="map-wrapper">
-        <svg id="map-svg" xmlns="http://www.w3.org/2000/svg" aria-label="Mapa de municípios"></svg>
+        <div id="map" aria-label="Mapa de municípios"></div>
       </div>
 
       <!-- Tooltip -->

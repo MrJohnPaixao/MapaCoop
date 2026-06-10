@@ -105,6 +105,10 @@ input  { font-family: inherit; }
   line-height: 1.2;
   color: var(--lu-primary);
 }
+.header-text h1 .brand-sub {
+  font-weight: 600;
+  color: var(--lu-accent);
+}
 .header-text p {
   font-size: 0.72rem;
   color: var(--lu-muted);

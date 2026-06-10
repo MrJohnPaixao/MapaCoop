@@ -1,6 +1,6 @@
 /**
  * map.js — MapLibre GL JS engine
- * Camadas de municípios, moldura de estados (MG/RS/ES), fitBounds,
+ * Camadas de municípios, moldura de estados (MG/RS/ES/SC/PR/SP/RJ), fitBounds,
  * hover/tooltip, seleção, dim por região.
  */
 
@@ -22,10 +22,11 @@ const MapEngine = (() => {
   const LAYER_LINE_ESTADOS  = 'line-estados';
   const ESTADOS_URL         = './data/estados.json';
 
-  // Temas de basemap — "lusystem" (CARTO sem labels, recolorido com a
-  // identidade da marca) é o padrão; "classic" é o dark-matter original do
-  // CARTO, mantido como opção alternável.
-  const STYLE_LUSYSTEM = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
+  // Temas de basemap — "lusystem" (CARTO dark-matter completo, recolorido
+  // com a identidade da marca, mantendo nomes de cidades, rios etc.) é o
+  // padrão; "classic" é o dark-matter original do CARTO, mantido como
+  // opção alternável.
+  const STYLE_LUSYSTEM = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
   const STYLE_CLASSIC  = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
   const THEME_KEY      = 'mapacoop-theme';
 
@@ -37,6 +38,7 @@ const MapEngine = (() => {
   let activeRegion     = null;
   let homeBounds       = null;
   let handlersBound    = false;
+  let regionZoom       = null; // zoom da view atual (home ou região focada)
   let currentTheme     = (localStorage.getItem(THEME_KEY) === 'classic') ? 'classic' : 'lusystem';
 
   /* ── Lê cores da marca a partir das CSS custom properties ────── */
@@ -70,6 +72,22 @@ const MapEngine = (() => {
     };
   }
 
+  /* ── Centro de uma feature (centroide ou bbox da geometria) ── */
+  function centerOf(feat) {
+    if (feat.centroide) return feat.centroide;
+    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    function scan(c) {
+      if (typeof c[0] === 'number') {
+        if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
+        if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
+      } else {
+        c.forEach(scan);
+      }
+    }
+    if (feat.geometry && feat.geometry.coordinates) scan(feat.geometry.coordinates);
+    return isFinite(w) ? [(w + e) / 2, (s + n) / 2] : null;
+  }
+
   /* ── Calcula bbox a partir dos centroides ────────────────── */
   function calcBounds(feats) {
     let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
@@ -81,21 +99,6 @@ const MapEngine = (() => {
     });
     if (!isFinite(w)) return null;
     return [[w - 0.3, s - 0.3], [e + 0.3, n + 0.3]];
-  }
-
-  /* ── Calcula bbox a partir da geometria de uma feature ───── */
-  function boundsFromGeometry(geom) {
-    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
-    function scan(c) {
-      if (typeof c[0] === 'number') {
-        if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0];
-        if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1];
-      } else {
-        c.forEach(scan);
-      }
-    }
-    if (geom && geom.coordinates) scan(geom.coordinates);
-    return isFinite(w) ? [[w, s], [e, n]] : null;
   }
 
   /* ── Expressão de opacidade que respeita dim por região ─── */
@@ -195,7 +198,7 @@ const MapEngine = (() => {
           'match', ['get', 'tipo'],
           'atuacao',   'rgba(11, 59, 38, 0.85)',
           'limitrofe', hexToRgba(accent, 0.50),
-          'outro',     hexToRgba(muted, 0.20),
+          'outro',     'rgba(220, 226, 235, 0.30)',
           'rgba(0, 0, 0, 0.3)'
         ],
         'line-width': ['interpolate', ['linear'], ['zoom'], 5, 0.35, 9, 0.9, 12, 1.5]
@@ -247,7 +250,7 @@ const MapEngine = (() => {
     });
   }
 
-  /* ── Moldura dos estados (MG, RS, ES) — fundo, abaixo dos municípios ── */
+  /* ── Moldura dos estados — fundo, abaixo dos municípios ── */
   function addEstadosLayer(geojson) {
     if (map.getSource(SOURCE_ESTADOS)) return;
 
@@ -378,6 +381,7 @@ const MapEngine = (() => {
   function fitHome(opts) {
     if (homeBounds && map) {
       map.fitBounds(homeBounds, Object.assign({ padding: 40, duration: 400 }, opts || {}));
+      map.once('moveend', () => { regionZoom = map.getZoom(); });
     }
   }
 
@@ -399,6 +403,7 @@ const MapEngine = (() => {
       setupClick();
       handlersBound = true;
     }
+    if (regionZoom === null) regionZoom = map.getZoom();
     reapplyState();
   }
 
@@ -446,11 +451,12 @@ const MapEngine = (() => {
     }
     if (typeof UI !== 'undefined') { UI.showInfoPanel(data || {}); UI.selectListItem(id); }
 
-    // Zoom/destaque no município selecionado
+    // Centraliza no município selecionado, mantendo o zoom da região (+1)
     const feat = features.find(f => f.id === id);
-    if (feat && feat.geometry && map) {
-      const bounds = boundsFromGeometry(feat.geometry);
-      if (bounds) map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 600 });
+    const center = feat ? centerOf(feat) : null;
+    if (center && map) {
+      const baseZoom = (regionZoom !== null) ? regionZoom : map.getZoom();
+      map.easeTo({ center, zoom: baseZoom + 1, duration: 600 });
     }
 
     if (onSelectCallback) onSelectCallback(id, data);
@@ -494,6 +500,9 @@ const MapEngine = (() => {
     map.once('moveend', () => {
       if (map.getZoom() < REGION_LABEL_ZOOM) {
         map.easeTo({ zoom: REGION_LABEL_ZOOM, duration: 300 });
+        map.once('moveend', () => { regionZoom = map.getZoom(); });
+      } else {
+        regionZoom = map.getZoom();
       }
     });
   }
@@ -514,9 +523,10 @@ const MapEngine = (() => {
       if (!map) return;
       if (selectedId !== null) {
         const feat = features.find(f => f.id === selectedId);
-        const bounds = feat && feat.geometry ? boundsFromGeometry(feat.geometry) : null;
-        if (bounds) {
-          map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 0 });
+        const center = feat ? centerOf(feat) : null;
+        if (center) {
+          const baseZoom = (regionZoom !== null) ? regionZoom : map.getZoom();
+          map.easeTo({ center, zoom: baseZoom + 1, duration: 0 });
           return;
         }
       }

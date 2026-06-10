@@ -15,7 +15,10 @@ const UI = (() => {
     'rs':       'RS Noroeste'
   };
 
-  const UF_LABELS = { MG: 'Minas Gerais', RS: 'Rio Grande do Sul' };
+  const UF_LABELS = {
+    MG: 'Minas Gerais', RS: 'Rio Grande do Sul', ES: 'Espírito Santo',
+    SC: 'Santa Catarina', PR: 'Paraná', SP: 'São Paulo', RJ: 'Rio de Janeiro'
+  };
 
   let currentTab = 'atuacao';
   let allFeatures = [];
