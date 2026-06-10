@@ -93,12 +93,55 @@
     document.querySelector('.filter-btn[data-region="todos"]').classList.add('active');
   });
 
+  // Alternância de tema do mapa (Lu System / Escuro clássico)
+  const btnTheme = document.getElementById('btn-theme-toggle');
+  if (btnTheme) {
+    const updateThemeBtn = () => {
+      const isClassic = MapEngine.getTheme() === 'classic';
+      btnTheme.textContent = isClassic ? '◑' : '◐';
+      btnTheme.title = isClassic
+        ? 'Tema: Escuro clássico (clique para Lu System)'
+        : 'Tema: Lu System (clique para Escuro clássico)';
+    };
+    updateThemeBtn();
+    btnTheme.addEventListener('click', () => {
+      MapEngine.setTheme(MapEngine.getTheme() === 'classic' ? 'lusystem' : 'classic');
+      updateThemeBtn();
+    });
+  }
+
   // Sidebar mobile
   document.getElementById('btn-menu').addEventListener('click', UI.openSidebar);
   document.getElementById('sidebar-overlay').addEventListener('click', UI.closeSidebar);
 
+  // Recolher/expandir sidebar esquerda (desktop)
+  const SIDEBAR_COLLAPSE_KEY = 'mapacoop-sidebar-collapsed';
+  const sidebarEl = document.getElementById('sidebar');
+  const btnCollapse = document.getElementById('btn-collapse-sidebar');
+  if (btnCollapse && sidebarEl) {
+    const updateCollapseBtn = () => {
+      const collapsed = sidebarEl.classList.contains('collapsed');
+      btnCollapse.textContent = collapsed ? '›' : '‹';
+      btnCollapse.title = collapsed ? 'Expandir painel' : 'Recolher painel';
+    };
+    if (localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === '1') {
+      sidebarEl.classList.add('collapsed');
+    }
+    updateCollapseBtn();
+    btnCollapse.addEventListener('click', () => {
+      sidebarEl.classList.toggle('collapsed');
+      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, sidebarEl.classList.contains('collapsed') ? '1' : '0');
+      updateCollapseBtn();
+    });
+  }
+
   // Fechar info panel
   document.getElementById('btn-close-info').addEventListener('click', () => {
+    UI.hideInfoPanel();
+    UI.deselectListItem();
+    document.querySelectorAll('.muni-path.selected').forEach(p => p.classList.remove('selected'));
+  });
+  document.getElementById('info-panel-overlay').addEventListener('click', () => {
     UI.hideInfoPanel();
     UI.deselectListItem();
     document.querySelectorAll('.muni-path.selected').forEach(p => p.classList.remove('selected'));
@@ -119,6 +162,7 @@
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       MapEngine.resize();
+      MapEngine.refitOnResize();
       UI.init(data.features, data.meta);
     }, 180);
   }

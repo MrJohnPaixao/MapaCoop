@@ -51,29 +51,34 @@
 
   <!-- Sidebar -->
   <aside id="sidebar">
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="atuacao">✅ Atuação</button>
-      <button class="tab-btn"        data-tab="limitrofe">📍 Limítrofes</button>
-    </div>
-
-    <div class="search-wrap">
-      <input type="search" id="search-input" placeholder="Buscar município..." autocomplete="off" autocorrect="off">
-    </div>
-
-    <div id="municipio-list" role="list"></div>
-
-    <div class="sidebar-legend">
-      <div class="legend-title">Legenda</div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:#7BFF6A;border:1.5px solid #0B3B26"></div>
-        Municípios de atuação
+    <div class="sidebar-inner">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="atuacao">✅ Atuação</button>
+        <button class="tab-btn"        data-tab="limitrofe">📍 Limítrofes</button>
       </div>
-      <div class="legend-item">
-        <div class="legend-swatch" style="background:rgba(0,229,255,.28);border:1px solid rgba(0,229,255,.72)"></div>
-        Municípios limítrofes
+
+      <div class="search-wrap">
+        <input type="search" id="search-input" placeholder="Buscar município..." autocomplete="off" autocorrect="off">
+      </div>
+
+      <div id="municipio-list" role="list"></div>
+
+      <div class="sidebar-legend">
+        <div class="legend-title">Legenda</div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:#7BFF6A;border:1.5px solid #0B3B26"></div>
+          Municípios de atuação
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch" style="background:rgba(0,229,255,.28);border:1px solid rgba(0,229,255,.72)"></div>
+          Municípios limítrofes
+        </div>
       </div>
     </div>
   </aside>
+
+  <!-- Botão para recolher/expandir a sidebar esquerda (desktop) -->
+  <button id="btn-collapse-sidebar" title="Recolher painel" aria-label="Recolher painel">‹</button>
 
   <!-- Main -->
   <main id="main">
@@ -111,15 +116,6 @@
         <div id="tt-uf"></div>
         <div id="tt-tag"></div>
       </div>
-
-      <!-- Info panel -->
-      <div id="info-panel" role="complementary">
-        <button id="btn-close-info" aria-label="Fechar">✕</button>
-        <h3 id="ip-nome"></h3>
-        <div class="info-row"><span>Estado</span><strong id="ip-estado"></strong></div>
-        <div class="info-row"><span>Região</span><strong id="ip-regiao"></strong></div>
-        <div class="info-row"><span>Tipo</span><strong id="ip-tipo"></strong></div>
-      </div>
     </div>
 
     <!-- Stats bar -->
@@ -131,6 +127,21 @@
     </div>
 
   </main>
+
+  <!-- Info panel overlay (mobile) -->
+  <div id="info-panel-overlay"></div>
+
+  <!-- Info panel (sidebar direita) -->
+  <aside id="info-panel" role="complementary">
+    <div class="info-panel-inner">
+      <button id="btn-close-info" aria-label="Fechar">✕</button>
+      <h3 id="ip-nome"></h3>
+      <div class="info-row"><span>Estado</span><strong id="ip-estado"></strong></div>
+      <div class="info-row"><span>Região</span><strong id="ip-regiao"></strong></div>
+      <div class="info-row"><span>Tipo</span><strong id="ip-tipo"></strong></div>
+      <div id="ip-indicadores"></div>
+    </div>
+  </aside>
 </div>
 
 <!-- Toast -->
