@@ -1,5 +1,5 @@
 // Service Worker — MapaCoop Lu System PWA
-const CACHE_NAME  = 'mapacoop-lusystem-v6';
+const CACHE_NAME  = 'mapacoop-lusystem-v7';
 const TILES_CACHE = 'mapacoop-tiles-v1';
 const KEEP_CACHES = [CACHE_NAME, TILES_CACHE];
 
@@ -16,8 +16,15 @@ const ASSETS = [
   './data/estados.json',
   './manifest.json',
   './icons/lu-moon.svg',
+  './icons/MapaCoop-icon.svg',
+  './icons/MapaCoop-maskable.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/icon-maskable-192.png',
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png',
+  './icons/favicon-32.png',
+  './icons/favicon-16.png',
   'https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=Exo+2:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap'
 ];
 

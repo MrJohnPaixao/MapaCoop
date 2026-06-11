@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MapaCoop · Pacote PWA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Exo+2:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --primary:#C8FF00; --accent:#00E5FF; --secondary:#7BFF6A;
+  --bg:#0A0F1E; --bg-card:#0D1830;
+  --text:#FFFFFF; --muted:#8A9CB5;
+  --line:rgba(0,229,255,.30); --line-soft:rgba(136,156,181,.16);
+  --display:'Orbitron',sans-serif; --alt:'Exo 2',sans-serif; --mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  font-family:var(--alt); background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  background-image:
+    radial-gradient(120% 80% at 82% 6%, rgba(0,90,110,.40) 0%, rgba(10,30,52,.18) 32%, rgba(8,14,28,0) 60%),
+    radial-gradient(90% 70% at 10% 40%, rgba(19,32,64,.5) 0%, rgba(8,14,28,0) 60%),
+    radial-gradient(150% 130% at 50% 36%, #0c1426 0%, #0a0f1e 46%, #070b16 80%, #04060d 100%);
+  background-attachment:fixed;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:0 clamp(20px,5vw,56px);}
+.eyebrow{font-weight:600; font-size:12.5px; letter-spacing:.42em; text-transform:uppercase; color:var(--accent); display:flex; align-items:center; gap:14px; margin-bottom:18px;}
+.eyebrow .idx{font-family:var(--display); font-weight:700; color:var(--primary); letter-spacing:.1em;}
+.eyebrow::after{content:''; flex:0 0 64px; height:1px; background:linear-gradient(90deg,var(--accent),transparent);}
+.divider{height:1px; background:linear-gradient(90deg,transparent,var(--line-soft) 18%,var(--line-soft) 82%,transparent); margin:8px 0 0;}
+section{padding:clamp(38px,6vh,64px) 0;}
+.sec-head{display:flex; align-items:baseline; gap:16px; margin-bottom:30px;}
+.sec-head h2{font-family:var(--display); font-weight:700; font-size:clamp(18px,2.4vw,24px); letter-spacing:.04em; text-transform:uppercase;}
+.sec-head .note{font-size:13.5px; color:var(--muted);}
+
+/* hero */
+.hero{display:grid; grid-template-columns:auto 1fr; gap:clamp(28px,5vw,60px); align-items:center; padding-top:clamp(50px,9vh,96px);}
+@media(max-width:740px){.hero{grid-template-columns:1fr; text-align:left;}}
+.hero .big{
+  width:236px; height:236px; border-radius:52px; overflow:hidden;
+  box-shadow:0 30px 70px rgba(0,0,0,.6), 0 0 0 1px rgba(0,229,255,.12), 0 0 60px rgba(0,229,255,.1);
+}
+.hero .big img{width:100%; height:100%; display:block;}
+.hero h1{font-family:var(--display); font-weight:800; font-size:clamp(30px,5vw,52px); line-height:1.02;}
+.hero h1 .m{color:var(--primary);} .hero h1 .c{color:var(--accent);}
+.hero p{font-weight:300; font-size:clamp(15px,2vw,18px); color:#cdd9e8; margin-top:18px; max-width:50ch; line-height:1.6;}
+.hero .tags{display:flex; gap:10px; flex-wrap:wrap; margin-top:22px;}
+.tag{font-size:11.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; padding:7px 14px; border-radius:999px; border:1px solid var(--line); color:var(--accent); background:rgba(0,229,255,.05);}
+
+/* asset grid */
+.assets{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:18px;}
+.asset{background:linear-gradient(180deg,rgba(13,24,48,.55),rgba(10,15,30,.4)); border:1px solid var(--line-soft); border-radius:14px; padding:20px 16px 16px; display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;}
+.asset .holder{height:120px; display:flex; align-items:center; justify-content:center;}
+.asset .holder img{display:block; image-rendering:auto; box-shadow:0 8px 20px rgba(0,0,0,.45);}
+.asset.round img{border-radius:22%;}
+.asset .nm{font-family:var(--mono); font-size:12px; color:#dbe6f2;}
+.asset .sz{font-size:11px; color:var(--muted); letter-spacing:.04em;}
+.asset .pur{font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--secondary); margin-top:-6px;}
+
+/* maskable */
+.mask-row{display:grid; grid-template-columns:repeat(3,1fr); gap:22px; align-items:center;}
+@media(max-width:680px){.mask-row{grid-template-columns:1fr 1fr;}}
+.mask-demo{background:rgba(13,24,48,.45); border:1px solid var(--line-soft); border-radius:14px; padding:24px; display:flex; flex-direction:column; align-items:center; gap:14px;}
+.mask-demo .frame{position:relative; width:140px; height:140px;}
+.mask-demo .frame img{width:100%; height:100%; display:block;}
+.mask-demo.circle img{clip-path:circle(50%);}
+.mask-demo.squircle img{border-radius:28%;}
+.mask-demo .safe{position:absolute; inset:11%; border:1.5px dashed rgba(0,229,255,.5); border-radius:50%; pointer-events:none;}
+.mask-demo .lbl{font-family:var(--mono); font-size:11.5px; color:var(--muted); letter-spacing:.04em;}
+
+/* code */
+.codeblock{position:relative; background:#070b16; border:1px solid var(--line-soft); border-radius:12px; overflow:hidden; margin-top:8px;}
+.codeblock .bar{display:flex; align-items:center; justify-content:space-between; padding:11px 16px; border-bottom:1px solid var(--line-soft); background:rgba(13,24,48,.5);}
+.codeblock .bar .fn{font-family:var(--mono); font-size:12px; color:var(--accent);}
+.codeblock .bar button{font-family:var(--alt); font-weight:600; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--bg); background:var(--primary); border:none; border-radius:6px; padding:6px 13px; cursor:pointer; transition:transform .15s;}
+.codeblock .bar button:hover{transform:translateY(-1px);}
+.codeblock .bar button.copied{background:var(--secondary);}
+.codeblock pre{margin:0; padding:18px 18px 20px; overflow-x:auto;}
+.codeblock code{font-family:var(--mono); font-size:12.5px; line-height:1.7; color:#cfe0f0; white-space:pre;}
+.codeblock .t{color:#5cc8ff;} .codeblock .a{color:var(--primary);} .codeblock .s{color:var(--secondary);} .codeblock .k{color:#8aa0bf;}
+
+/* steps */
+.steps{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; counter-reset:s;}
+@media(max-width:680px){.steps{grid-template-columns:1fr;}}
+.step{background:rgba(13,24,48,.4); border:1px solid var(--line-soft); border-radius:14px; padding:24px 22px;}
+.step::before{counter-increment:s; content:counter(s,decimal-leading-zero); font-family:var(--display); font-weight:800; font-size:20px; color:var(--primary); display:block; margin-bottom:12px;}
+.step h4{font-family:var(--alt); font-weight:700; font-size:15px; margin-bottom:8px;}
+.step p{font-size:13.5px; color:#cdd9e8; line-height:1.55;}
+.step code{font-family:var(--mono); font-size:12px; color:var(--accent); background:rgba(0,229,255,.07); padding:1px 6px; border-radius:4px;}
+
+footer{padding:54px 0 70px; border-top:1px solid var(--line-soft); margin-top:30px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+footer img{width:42px; filter:drop-shadow(0 0 20px rgba(40,220,180,.3));}
+footer .wm{font-family:var(--display); font-weight:800; font-size:20px;}
+footer .wm .l{color:var(--primary);} footer .wm .s{color:var(--accent);}
+footer .meta{margin-left:auto; font-family:var(--mono); font-size:11.5px; color:var(--muted); text-align:right; line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div class="big"><img src="MapaCoop-icon.svg" alt="Ícone MapaCoop"></div>
+    <div>
+      <div class="eyebrow"><span class="idx">LU SYSTEM</span> Pacote PWA · Direção 06 · Sólido</div>
+      <h1><span class="m">Mapa</span><span class="c">Coop</span></h1>
+      <p>Elemento pronto para instalar. O ícone vem como <b>SVG vetorial</b> (a lua oficial embutida, não referenciada)
+        e como <b>PNGs</b> nos tamanhos que Android, iOS e navegadores pedem — incluindo a versão <b>maskable</b>.</p>
+      <div class="tags">
+        <span class="tag">SVG vetorial</span>
+        <span class="tag">192 · 512</span>
+        <span class="tag">Maskable</span>
+        <span class="tag">Apple touch</span>
+        <span class="tag">Favicon</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <section>
+    <div class="sec-head"><h2>O que vem na caixa</h2><span class="note">pasta <code style="font-family:var(--mono);color:var(--accent)">pwa/</code> — tamanho real</span></div>
+    <div class="assets">
+      <div class="asset round"><div class="holder"><img src="MapaCoop-icon.svg" width="100" height="100"></div><div class="nm">MapaCoop-icon.svg</div><div class="sz">vetorial · any</div></div>
+      <div class="asset round"><div class="holder"><img src="icons/icon-512.png" width="100" height="100"></div><div class="nm">icon-512.png</div><div class="sz">512×512</div><div class="pur">any</div></div>
+      <div class="asset round"><div class="holder"><img src="icons/icon-192.png" width="96" height="96"></div><div class="nm">icon-192.png</div><div class="sz">192×192</div><div class="pur">any</div></div>
+      <div class="asset"><div class="holder"><img src="icons/icon-maskable-512.png" width="100" height="100"></div><div class="nm">maskable-512.png</div><div class="sz">512×512</div><div class="pur">maskable</div></div>
+      <div class="asset"><div class="holder"><img src="icons/icon-maskable-192.png" width="96" height="96"></div><div class="nm">maskable-192.png</div><div class="sz">192×192</div><div class="pur">maskable</div></div>
+      <div class="asset"><div class="holder"><img src="icons/apple-touch-icon.png" width="90" height="90"></div><div class="nm">apple-touch-icon</div><div class="sz">180×180</div><div class="pur">iOS</div></div>
+      <div class="asset round"><div class="holder"><img src="icons/favicon-32.png" width="32" height="32"></div><div class="nm">favicon-32.png</div><div class="sz">32×32</div></div>
+      <div class="asset round"><div class="holder"><img src="icons/favicon-16.png" width="16" height="16"></div><div class="nm">favicon-16.png</div><div class="sz">16×16</div></div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <section>
+    <div class="sec-head"><h2>Maskable · zona de segurança</h2><span class="note">o conteúdo cabe no círculo de 80% — nenhum recorte do sistema corta o alfinete</span></div>
+    <div class="mask-row">
+      <div class="mask-demo"><div class="frame"><img src="icons/icon-maskable-512.png"><div class="safe"></div></div><div class="lbl">safe-zone (80%)</div></div>
+      <div class="mask-demo circle"><div class="frame"><img src="icons/icon-maskable-512.png"></div><div class="lbl">máscara circular</div></div>
+      <div class="mask-demo squircle"><div class="frame"><img src="icons/icon-maskable-512.png"></div><div class="lbl">máscara squircle</div></div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <section>
+    <div class="sec-head"><h2>Instalar em 3 passos</h2></div>
+    <div class="steps">
+      <div class="step"><h4>Copie a pasta</h4><p>Jogue <code>pwa/icons/</code>, <code>MapaCoop-icon.svg</code> e <code>manifest.json</code> para a raiz pública do seu app.</p></div>
+      <div class="step"><h4>Ligue o manifest</h4><p>Adicione as tags abaixo no <code>&lt;head&gt;</code>. O <code>theme-color</code> deixa a barra do sistema no Deep&nbsp;Space.</p></div>
+      <div class="step"><h4>Pronto p/ instalar</h4><p>Em HTTPS + service worker, o navegador oferece "Adicionar à tela inicial" com este ícone.</p></div>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="codeblock">
+      <div class="bar"><span class="fn">&lt;head&gt; — cole no seu HTML</span><button data-copy="head">Copiar</button></div>
+<pre><code id="head"><span class="k">&lt;!-- PWA · MapaCoop --&gt;</span>
+<span class="t">&lt;link</span> <span class="a">rel</span>=<span class="s">"manifest"</span> <span class="a">href</span>=<span class="s">"/manifest.json"</span><span class="t">&gt;</span>
+<span class="t">&lt;meta</span> <span class="a">name</span>=<span class="s">"theme-color"</span> <span class="a">content</span>=<span class="s">"#0A0F1E"</span><span class="t">&gt;</span>
+<span class="t">&lt;link</span> <span class="a">rel</span>=<span class="s">"icon"</span> <span class="a">type</span>=<span class="s">"image/svg+xml"</span> <span class="a">href</span>=<span class="s">"/MapaCoop-icon.svg"</span><span class="t">&gt;</span>
+<span class="t">&lt;link</span> <span class="a">rel</span>=<span class="s">"icon"</span> <span class="a">type</span>=<span class="s">"image/png"</span> <span class="a">sizes</span>=<span class="s">"32x32"</span> <span class="a">href</span>=<span class="s">"/icons/favicon-32.png"</span><span class="t">&gt;</span>
+<span class="t">&lt;link</span> <span class="a">rel</span>=<span class="s">"icon"</span> <span class="a">type</span>=<span class="s">"image/png"</span> <span class="a">sizes</span>=<span class="s">"16x16"</span> <span class="a">href</span>=<span class="s">"/icons/favicon-16.png"</span><span class="t">&gt;</span>
+<span class="t">&lt;link</span> <span class="a">rel</span>=<span class="s">"apple-touch-icon"</span> <span class="a">href</span>=<span class="s">"/icons/apple-touch-icon.png"</span><span class="t">&gt;</span></code></pre>
+    </div>
+
+    <div class="codeblock" style="margin-top:22px">
+      <div class="bar"><span class="fn">manifest.json</span><button data-copy="manifest">Copiar</button></div>
+<pre><code id="manifest"></code></pre>
+    </div>
+  </section>
+
+  <footer>
+    <img src="../assets/lu-moon.svg" alt="">
+    <div class="wm"><span class="l">LU</span> <span class="s">SYSTEM</span></div>
+    <div class="meta">MapaCoop · Pacote PWA<br>Deep Space · lima · ciano</div>
+  </footer>
+
+</div>
+
+<script>
+const MANIFEST = {
+  name:"MapaCoop", short_name:"MapaCoop",
+  description:"MapaCoop — território e cooperativismo no mapa.",
+  id:"/", start_url:"/", scope:"/", display:"standalone", orientation:"portrait",
+  background_color:"#0A0F1E", theme_color:"#0A0F1E",
+  icons:[
+    {src:"icons/icon-192.png", sizes:"192x192", type:"image/png", purpose:"any"},
+    {src:"icons/icon-512.png", sizes:"512x512", type:"image/png", purpose:"any"},
+    {src:"icons/icon-maskable-192.png", sizes:"192x192", type:"image/png", purpose:"maskable"},
+    {src:"icons/icon-maskable-512.png", sizes:"512x512", type:"image/png", purpose:"maskable"},
+    {src:"MapaCoop-icon.svg", sizes:"any", type:"image/svg+xml", purpose:"any"}
+  ]
+};
+document.getElementById('manifest').textContent = JSON.stringify(MANIFEST, null, 2);
+
+document.querySelectorAll('[data-copy]').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    const el = document.getElementById(btn.getAttribute('data-copy'));
+    try{ await navigator.clipboard.writeText(el.textContent); }catch(e){}
+    const old = btn.textContent; btn.textContent='Copiado ✓'; btn.classList.add('copied');
+    setTimeout(()=>{ btn.textContent=old; btn.classList.remove('copied'); }, 1400);
+  });
+});
+</script>
+</body>
+</html>
