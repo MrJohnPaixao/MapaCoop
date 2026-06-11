@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="MapaCoop Lu System: mapa interativo da area de atuacao cooperativa">
   <meta name="theme-color" content="#0A0F1E">
   <meta name="mobile-web-app-capable" content="yes">
@@ -88,10 +88,12 @@
 
     <!-- Toolbar -->
     <div id="toolbar">
-      <button class="filter-btn active" data-region="todos">Todos</button>
-      <button class="filter-btn" data-region="mg-oeste">MG Oeste</button>
-      <button class="filter-btn" data-region="rs">RS</button>
-      <button class="filter-btn" data-region="mg-leste">MG Leste</button>
+      <div class="filter-group">
+        <button class="filter-btn active" data-region="todos">Todos</button>
+        <button class="filter-btn" data-region="mg-oeste">MG Oeste</button>
+        <button class="filter-btn" data-region="rs">RS</button>
+        <button class="filter-btn" data-region="mg-leste">MG Leste</button>
+      </div>
       <div class="zoom-group">
         <button class="zoom-btn" id="btn-zoom-in"    title="Zoom +">+</button>
         <button class="zoom-btn" id="btn-zoom-out"   title="Zoom −">−</button>

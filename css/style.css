@@ -48,7 +48,7 @@
 
 /* ── Reset ─────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 100%; height: 100%; overflow: hidden; }
+html, body { width: 100%; height: 100%; overflow: hidden; touch-action: pan-x pan-y; }
 body {
   font-family: var(--font-body), var(--font-friendly), Arial, system-ui, sans-serif;
   background:
@@ -355,6 +355,20 @@ input  { font-family: inherit; }
   flex-shrink: 0;
 }
 
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  min-width: 0;
+}
+.filter-group::-webkit-scrollbar { display: none; }
+
 .filter-btn {
   padding: 5px 13px;
   border-radius: 20px;
@@ -416,6 +430,7 @@ input  { font-family: inherit; }
 #map {
   width: 100%;
   height: 100%;
+  touch-action: none;
 }
 
 
@@ -718,7 +733,8 @@ input  { font-family: inherit; }
   .header-badges .badge:not(:first-child) { display: none; }
 
   #toolbar { gap: 4px; padding: 0 10px; }
-  .filter-btn { padding: 4px 9px; font-size: 0.7rem; }
+  .filter-group { gap: 4px; }
+  .filter-btn { padding: 4px 9px; font-size: 0.7rem; flex-shrink: 0; }
 
   #info-panel {
     position: fixed;
@@ -744,6 +760,5 @@ input  { font-family: inherit; }
 }
 
 @media (max-width: 400px) {
-  .filter-btn { display: none; }
-  .filter-btn.active { display: block; }
+  .filter-btn { padding: 4px 8px; font-size: 0.66rem; }
 }
